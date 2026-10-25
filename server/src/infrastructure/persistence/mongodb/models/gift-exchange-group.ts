@@ -9,6 +9,10 @@ interface ParticipantAttrs {
   id: string;
   name: string;
   exclusions: string[];
+  userId: string | null;
+  inviteCodeHash: string | null;
+  inviteCreatedAt: Date | null;
+  claimedCodeHash: string | null;
 }
 
 interface MemberAttrs {
@@ -28,6 +32,10 @@ const ParticipantSchema = new mongoose.Schema(
     id: { type: String, required: true },
     name: { type: String, required: true },
     exclusions: { type: [String], default: [] },
+    userId: { type: String, default: null },
+    inviteCodeHash: { type: String, default: null },
+    inviteCreatedAt: { type: Date, default: null },
+    claimedCodeHash: { type: String, default: null },
   },
   { _id: false }
 );
@@ -47,6 +55,8 @@ const GiftExchangeGroupSchema = new mongoose.Schema({
 });
 
 GiftExchangeGroupSchema.index({ 'members.userId': 1 });
+GiftExchangeGroupSchema.index({ 'participants.inviteCodeHash': 1 });
+GiftExchangeGroupSchema.index({ 'participants.claimedCodeHash': 1 });
 
 const toMember = ({ userId, role }: MemberAttrs): GroupMember => ({
   userId,
@@ -59,8 +69,25 @@ GiftExchangeGroupSchema.methods.toEntity = function (): GiftExchangeGroup {
     id: String(_id),
     name,
     participants: participants.map(
-      ({ id, name, exclusions }) =>
-        new Participant({ id, name, exclusions: [...exclusions] })
+      ({
+        id,
+        name,
+        exclusions,
+        userId,
+        inviteCodeHash,
+        inviteCreatedAt,
+        claimedCodeHash,
+      }) =>
+        new Participant({
+          id,
+          name,
+          exclusions: [...exclusions],
+          userId: userId ?? null,
+          invite: inviteCodeHash
+            ? { codeHash: inviteCodeHash, createdAt: inviteCreatedAt ?? new Date(0) }
+            : null,
+          claimedCodeHash: claimedCodeHash ?? null,
+        })
     ),
     members: (members ?? []).map(toMember),
   });
@@ -75,7 +102,18 @@ export const toParticipantAttrs = ({
   id,
   name,
   exclusions,
-}: Participant): ParticipantAttrs => ({ id, name, exclusions });
+  userId,
+  invite,
+  claimedCodeHash,
+}: Participant): ParticipantAttrs => ({
+  id,
+  name,
+  exclusions,
+  userId,
+  inviteCodeHash: invite?.codeHash ?? null,
+  inviteCreatedAt: invite?.createdAt ?? null,
+  claimedCodeHash,
+});
 
 export const toMemberAttrs = ({ userId, role }: GroupMember): MemberAttrs => ({
   userId,

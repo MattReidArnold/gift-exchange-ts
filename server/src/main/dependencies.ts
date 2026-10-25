@@ -1,4 +1,5 @@
 import Dependencies from '#src/application/dependencies';
+import randomInviteTokenFactory from '#src/infrastructure/id/random-invite-token-factory';
 import uuidIdGenerator from '#src/infrastructure/id/uuid-id-generator';
 import winstonLogger from '#src/infrastructure/logger/winston-logger';
 import mongoConnect from '#src/infrastructure/persistence/mongodb/connect';
@@ -12,5 +13,6 @@ export default async (): Promise<Dependencies> => {
     logger,
     groupRepository: new MongoGiftExchangeGroupRepository(),
     idGenerator: uuidIdGenerator(),
+    inviteTokens: randomInviteTokenFactory(),
   };
 };

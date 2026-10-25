@@ -1,6 +1,7 @@
 import AddIcon from '@mui/icons-material/Add'
 import DeleteIcon from '@mui/icons-material/Delete'
 import EditIcon from '@mui/icons-material/Edit'
+import LinkIcon from '@mui/icons-material/Link'
 import Breadcrumbs from '@mui/material/Breadcrumbs'
 import Button from '@mui/material/Button'
 import Chip from '@mui/material/Chip'
@@ -26,13 +27,16 @@ import {
   groupQuery,
   useAddParticipant,
   useDeleteGroup,
+  useIssueInvite,
   useRemoveParticipant,
   useRenameGroup,
+  useRevokeInvite,
   useUpdateParticipant,
 } from '#src/api/groups.ts'
 import type { Group, Participant } from '#src/api/types.ts'
 import { ConfirmDialog } from '#src/components/ConfirmDialog.tsx'
 import { GroupFormDialog } from '#src/components/GroupFormDialog.tsx'
+import { InviteDialog } from '#src/components/InviteDialog.tsx'
 import { ParticipantFormDialog } from '#src/components/ParticipantFormDialog.tsx'
 import { paths } from '#src/paths.ts'
 
@@ -74,6 +78,10 @@ export function GroupDetailPage() {
   const removeParticipant = useRemoveParticipant(group.id)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [participantToRemove, setParticipantToRemove] = useState<Participant | null>(null)
+  const [inviteTarget, setInviteTarget] = useState<Participant | null>(null)
+  const [inviteToken, setInviteToken] = useState<string | null>(null)
+  const issueInvite = useIssueInvite(group.id)
+  const revokeInvite = useRevokeInvite(group.id)
 
   const handleDeleteGroup = () =>
     deleteGroup.mutate(group.id, {
@@ -93,6 +101,24 @@ export function GroupDetailPage() {
     setParticipantToRemove(null)
     removeParticipant.reset()
   }
+
+  const openInvite = (participant: Participant) => {
+    setInviteToken(null)
+    issueInvite.reset()
+    revokeInvite.reset()
+    setInviteTarget(participant)
+  }
+
+  const closeInvite = () => {
+    setInviteTarget(null)
+    setInviteToken(null)
+    issueInvite.reset()
+    revokeInvite.reset()
+  }
+
+  const currentInviteTarget = inviteTarget
+    ? (group.participants.find(({ id }) => id === inviteTarget.id) ?? inviteTarget)
+    : null
 
   return (
     <Stack spacing={3}>
@@ -163,6 +189,14 @@ export function GroupDetailPage() {
                   divider
                   secondaryAction={
                     <Stack direction="row" spacing={1}>
+                      {participant.userId ? null : (
+                        <IconButton
+                          onClick={() => openInvite(participant)}
+                          aria-label={`Invite ${participant.name}`}
+                        >
+                          <LinkIcon />
+                        </IconButton>
+                      )}
                       <IconButton
                         component={RouterLink}
                         to={paths.editParticipant(group.id, participant.id)}
@@ -179,10 +213,24 @@ export function GroupDetailPage() {
                       </IconButton>
                     </Stack>
                   }
-                  sx={{ pr: 14 }}
+                  sx={{ pr: { xs: 18, sm: 22 } }}
                 >
                   <ListItemText
-                    primary={participant.name}
+                    primary={
+                      <Stack
+                        direction="row"
+                        spacing={1}
+                        component="span"
+                        sx={{ alignItems: 'center', flexWrap: 'wrap' }}
+                      >
+                        <span>{participant.name}</span>
+                        {participant.userId ? (
+                          <Chip label="Linked" size="small" color="success" component="span" />
+                        ) : participant.invitePending ? (
+                          <Chip label="Invite pending" size="small" component="span" />
+                        ) : null}
+                      </Stack>
+                    }
                     secondary={<ExclusionChips group={group} participant={participant} />}
                     slotProps={{ secondary: { component: 'span' } }}
                   />
@@ -216,6 +264,27 @@ export function GroupDetailPage() {
         onConfirm={handleRemoveParticipant}
         onClose={closeRemoveParticipant}
       />
+
+      {currentInviteTarget ? (
+        <InviteDialog
+          open
+          participantName={currentInviteTarget.name}
+          invitePending={currentInviteTarget.invitePending}
+          token={inviteToken}
+          issuing={issueInvite.isPending}
+          revoking={revokeInvite.isPending}
+          error={issueInvite.error ?? revokeInvite.error}
+          onIssue={() =>
+            issueInvite.mutate(currentInviteTarget.id, {
+              onSuccess: ({ token }) => setInviteToken(token),
+            })
+          }
+          onRevoke={() =>
+            revokeInvite.mutate(currentInviteTarget.id, { onSuccess: closeInvite })
+          }
+          onClose={closeInvite}
+        />
+      ) : null}
 
       <Outlet />
     </Stack>

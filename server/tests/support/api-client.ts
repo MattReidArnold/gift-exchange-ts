@@ -6,6 +6,8 @@ export type ParticipantJson = {
   id: string;
   name: string;
   exclusions: string[];
+  userId: string | null;
+  invitePending: boolean;
 };
 
 export type MemberJson = {
@@ -18,6 +20,20 @@ export type GroupJson = {
   name: string;
   participants: ParticipantJson[];
   members: MemberJson[];
+};
+
+export type IssuedInviteJson = {
+  group: GroupJson;
+  token: string;
+};
+
+export type InvitePreviewJson = {
+  groupName: string;
+  participantName: string;
+};
+
+export type ClaimedInviteJson = {
+  groupId: string;
 };
 
 export type FailureJson = {
@@ -164,6 +180,20 @@ export const createApiClient = ({
         'DELETE',
         `/api/groups/${groupId}/participants/${participantId}`
       ),
+    issueInvite: (groupId: string, participantId: string) =>
+      request<IssuedInviteJson>(
+        'POST',
+        `/api/groups/${groupId}/participants/${participantId}/invite`
+      ),
+    revokeInvite: (groupId: string, participantId: string) =>
+      request<GroupJson>(
+        'DELETE',
+        `/api/groups/${groupId}/participants/${participantId}/invite`
+      ),
+    previewInvite: (token: string) =>
+      request<InvitePreviewJson>('GET', `/api/invites/${token}`),
+    claimInvite: (token: string) =>
+      request<ClaimedInviteJson>('POST', `/api/invites/${token}/claim`),
     cleanup: async () => {
       await Promise.all([...createdGroupIds].map(deleteGroup));
     },

@@ -6,9 +6,12 @@ import {
   ParticipantValidationError,
   groupNameEmptyFailure,
   invalidExclusionFailure,
+  inviteNotPendingFailure,
+  participantAlreadyLinkedFailure,
   participantNameEmptyFailure,
   participantNameTakenFailure,
   participantNotFoundFailure,
+  userAlreadyLinkedFailure,
 } from '#src/domain/gift-exchange-group-error';
 
 export type GroupMemberRole = 'owner' | 'member';
@@ -44,6 +47,32 @@ type ParticipantResult = Result<
 type ExistingParticipantResult = Result<
   GiftExchangeGroup,
   Failure<GiftExchangeGroupError.ParticipantNotFound | ParticipantValidationError>
+>;
+
+type IssueInviteResult = Result<
+  GiftExchangeGroup,
+  Failure<
+    | GiftExchangeGroupError.ParticipantNotFound
+    | GiftExchangeGroupError.ParticipantAlreadyLinked
+  >
+>;
+
+type ClearInviteResult = Result<
+  GiftExchangeGroup,
+  Failure<
+    | GiftExchangeGroupError.ParticipantNotFound
+    | GiftExchangeGroupError.InviteNotPending
+  >
+>;
+
+type ClaimInviteResult = Result<
+  GiftExchangeGroup,
+  Failure<
+    | GiftExchangeGroupError.ParticipantNotFound
+    | GiftExchangeGroupError.ParticipantAlreadyLinked
+    | GiftExchangeGroupError.UserAlreadyLinked
+    | GiftExchangeGroupError.InviteNotPending
+  >
 >;
 
 export default class GiftExchangeGroup {
@@ -126,6 +155,9 @@ export default class GiftExchangeGroup {
       id: existing.id,
       name: name?.trim() ?? existing.name,
       exclusions: exclusions ? unique(exclusions) : existing.exclusions,
+      userId: existing.userId,
+      invite: existing.invite,
+      claimedCodeHash: existing.claimedCodeHash,
     });
     return this.withValidParticipant(
       participant,
@@ -147,9 +179,105 @@ export default class GiftExchangeGroup {
             id: p.id,
             name: p.name,
             exclusions: p.exclusions.filter((id) => id !== participantId),
+            userId: p.userId,
+            invite: p.invite,
+            claimedCodeHash: p.claimedCodeHash,
           })
       );
     return ok(this.withParticipants(remaining));
+  }
+
+  issueInvite(
+    participantId: string,
+    codeHash: string,
+    createdAt: Date
+  ): IssueInviteResult {
+    const existing = this.findParticipant(participantId);
+    if (!existing) {
+      return err(participantNotFoundFailure());
+    }
+    if (existing.userId) {
+      return err(participantAlreadyLinkedFailure());
+    }
+    const trimmedHash = codeHash.trim();
+    if (!trimmedHash) {
+      throw new Error('Invite code hash cannot be empty');
+    }
+    return ok(
+      this.replaceParticipant(
+        new Participant({
+          id: existing.id,
+          name: existing.name,
+          exclusions: existing.exclusions,
+          invite: { codeHash: trimmedHash, createdAt },
+        })
+      )
+    );
+  }
+
+  clearInvite(participantId: string): ClearInviteResult {
+    const existing = this.findParticipant(participantId);
+    if (!existing) {
+      return err(participantNotFoundFailure());
+    }
+    if (!existing.invite) {
+      return err(inviteNotPendingFailure());
+    }
+    return ok(
+      this.replaceParticipant(
+        new Participant({
+          id: existing.id,
+          name: existing.name,
+          exclusions: existing.exclusions,
+          userId: existing.userId,
+          claimedCodeHash: existing.claimedCodeHash,
+        })
+      )
+    );
+  }
+
+  claimInvite(participantId: string, userId: string): ClaimInviteResult {
+    const existing = this.findParticipant(participantId);
+    if (!existing) {
+      return err(participantNotFoundFailure());
+    }
+    const trimmedUserId = userId.trim();
+    if (!trimmedUserId) {
+      throw new Error('User id cannot be empty');
+    }
+    if (existing.userId === trimmedUserId) {
+      return ok(this);
+    }
+    if (existing.userId) {
+      return err(participantAlreadyLinkedFailure());
+    }
+    if (this.participants.some((participant) => participant.userId === trimmedUserId)) {
+      return err(userAlreadyLinkedFailure());
+    }
+    if (!existing.invite) {
+      return err(inviteNotPendingFailure());
+    }
+    const members = this.members.some((member) => member.userId === trimmedUserId)
+      ? this.members
+      : [...this.members, { userId: trimmedUserId, role: 'member' as const }];
+    return ok(
+      new GiftExchangeGroup({
+        id: this.id,
+        name: this.name,
+        participants: this.participants.map((participant) =>
+          participant.id === existing.id
+            ? new Participant({
+                id: existing.id,
+                name: existing.name,
+                exclusions: existing.exclusions,
+                userId: trimmedUserId,
+                claimedCodeHash: existing.invite?.codeHash ?? null,
+              })
+            : participant
+        ),
+        members,
+      })
+    );
   }
 
   private withValidParticipant(
@@ -195,6 +323,14 @@ export default class GiftExchangeGroup {
       participants,
       members: this.members,
     });
+  }
+
+  private replaceParticipant(participant: Participant): GiftExchangeGroup {
+    return this.withParticipants(
+      this.participants.map((existing) =>
+        existing.id === participant.id ? participant : existing
+      )
+    );
   }
 }
 

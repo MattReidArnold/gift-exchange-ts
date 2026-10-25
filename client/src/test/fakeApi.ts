@@ -63,12 +63,35 @@ export const createFakeApi = (
   let isSignedIn = signedIn
   let groups: Group[] = structuredClone(initialGroups)
   let nextId = 1
+  const invites = new Map<string, { groupId: string; participantId: string }>()
   const newId = (prefix: string) => `${prefix}-${nextId++}`
 
-  const replaceGroup = (group: Group, status = 200) => {
+  const saveGroup = (group: Group) => {
     groups = groups.map((existing) => (existing.id === group.id ? group : existing))
-    return json(status, group)
+    return group
   }
+
+  const participantById = (participantId: string) => {
+    for (const group of groups) {
+      const participant = group.participants.find(({ id }) => id === participantId)
+      if (participant) {
+        return { group, participant }
+      }
+    }
+    return undefined
+  }
+
+  const inviteTarget = (token: string) => {
+    const saved = invites.get(token)
+    if (saved) {
+      const group = groups.find(({ id }) => id === saved.groupId)
+      const participant = group?.participants.find(({ id }) => id === saved.participantId)
+      return group && participant ? { group, participant } : undefined
+    }
+    return participantById(token)
+  }
+
+  const replaceGroup = (group: Group, status = 200) => json(status, saveGroup(group))
 
   const handle = async (input: RequestInfo | URL, init: RequestInit = {}) => {
     const url = input instanceof Request ? input.url : String(input)
@@ -82,6 +105,63 @@ export const createFakeApi = (
     if (pathname === '/api/auth/sign-out' && method === 'POST') {
       isSignedIn = false
       return json(200, { success: true })
+    }
+
+    if (pathname.startsWith('/api/invites/')) {
+      const rest = pathname.slice('/api/invites/'.length)
+      const claiming = rest.endsWith('/claim')
+      const token = decodeURIComponent(claiming ? rest.slice(0, -'/claim'.length) : rest)
+      if (token === 'unauthorized') {
+        return failure(401, 'UNAUTHENTICATED', 'Sign in to continue')
+      }
+      const target = inviteTarget(token)
+      const pending =
+        target?.participant.invitePending && !target.participant.userId
+      if (!target || !pending) {
+        return failure(
+          404,
+          'INVITE_NOT_FOUND',
+          'Invite link is invalid or has already been used',
+        )
+      }
+      if (!claiming) {
+        return json(200, {
+          groupName: target.group.name,
+          participantName: target.participant.name,
+        })
+      }
+      if (!isSignedIn) {
+        return failure(401, 'UNAUTHENTICATED', 'Sign in to continue')
+      }
+      if (
+        target.group.participants.some(
+          (participant) =>
+            participant.userId === signedInUser.id &&
+            participant.id !== target.participant.id,
+        )
+      ) {
+        return failure(
+          409,
+          'USER_ALREADY_LINKED',
+          'This account is already linked to another participant in the group',
+        )
+      }
+      const members = target.group.members.some(
+        (member) => member.userId === signedInUser.id,
+      )
+        ? target.group.members
+        : [...target.group.members, { userId: signedInUser.id, role: 'member' as const }]
+      saveGroup({
+        ...target.group,
+        members,
+        participants: target.group.participants.map((participant) =>
+          participant.id === target.participant.id
+            ? { ...participant, userId: signedInUser.id, invitePending: false }
+            : participant,
+        ),
+      })
+      invites.delete(token)
+      return json(200, { groupId: target.group.id })
     }
 
     const [, , , groupId, , participantId] = pathname.split('/')
@@ -138,6 +218,8 @@ export const createFakeApi = (
         id: newId('participant'),
         name,
         exclusions: body.exclusions ?? [],
+        userId: null,
+        invitePending: false,
       }
       return replaceGroup(
         { ...group, participants: [...group.participants, participant] },
@@ -150,6 +232,49 @@ export const createFakeApi = (
     )
     if (!existing) {
       return participantNotFound()
+    }
+
+    if (pathname.endsWith('/invite')) {
+      if (method === 'DELETE') {
+        if (!existing.invitePending) {
+          return failure(
+            404,
+            'INVITE_NOT_PENDING',
+            'This participant does not have a pending invite',
+          )
+        }
+        for (const [storedToken, stored] of invites) {
+          if (stored.participantId === existing.id && stored.groupId === group.id) {
+            invites.delete(storedToken)
+          }
+        }
+        return replaceGroup({
+          ...group,
+          participants: group.participants.map((participant) =>
+            participant.id === existing.id
+              ? { ...participant, invitePending: false }
+              : participant,
+          ),
+        })
+      }
+      if (existing.userId) {
+        return failure(
+          409,
+          'PARTICIPANT_ALREADY_LINKED',
+          'This participant is already linked to an account',
+        )
+      }
+      const token = `issued-${existing.id}`
+      invites.set(token, { groupId: group.id, participantId: existing.id })
+      const nextGroup = saveGroup({
+        ...group,
+        participants: group.participants.map((participant) =>
+          participant.id === existing.id
+            ? { ...participant, invitePending: true }
+            : participant,
+        ),
+      })
+      return json(200, { group: nextGroup, token })
     }
 
     if (method === 'DELETE') {

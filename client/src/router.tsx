@@ -13,6 +13,7 @@ import {
   RenameGroupRoute,
 } from '#src/pages/GroupDetailPage.tsx'
 import { GroupsPage, NewGroupRoute } from '#src/pages/GroupsPage.tsx'
+import { JoinPage } from '#src/pages/JoinPage.tsx'
 import { LoginPage } from '#src/pages/LoginPage.tsx'
 import { NotFoundPage } from '#src/pages/NotFoundPage.tsx'
 import { RouteErrorPage } from '#src/pages/RouteErrorPage.tsx'
@@ -49,6 +50,10 @@ export const createRoutes = (queryClient: QueryClient): RouteObject[] => [
           return null
         },
         element: <LoginPage />,
+      },
+      {
+        path: 'join/:token',
+        element: <JoinPage />,
       },
       {
         element: <AppLayout />,

@@ -1,6 +1,8 @@
 import mongoose from 'mongoose';
 
-import GiftExchangeGroupRepository from '#src/application/ports/gift-exchange-group-repository';
+import GiftExchangeGroupRepository, {
+  ClaimInviteOutcome,
+} from '#src/application/ports/gift-exchange-group-repository';
 import GiftExchangeGroup from '#src/domain/gift-exchange-group';
 import GiftExchangeGroupModel, {
   toMemberAttrs,
@@ -54,5 +56,112 @@ export default class MongoGiftExchangeGroupRepository
       _id: id,
     }).exec();
     return deletedCount > 0;
+  }
+
+  async findByPendingInviteHash(codeHash: string): Promise<GiftExchangeGroup | null> {
+    const doc = await GiftExchangeGroupModel.findOne({
+      participants: { $elemMatch: { inviteCodeHash: codeHash, userId: null } },
+    }).exec();
+    return doc ? doc.toEntity() : null;
+  }
+
+  async claimInvite({
+    codeHash,
+    userId,
+  }: {
+    codeHash: string;
+    userId: string;
+  }): Promise<ClaimInviteOutcome> {
+    const existing = await GiftExchangeGroupModel.findOne({
+      $or: [
+        { 'participants.inviteCodeHash': codeHash },
+        { 'participants.claimedCodeHash': codeHash },
+      ],
+    }).exec();
+    if (!existing) {
+      return { status: 'not-found' };
+    }
+
+    const group = existing.toEntity();
+    const participant = group.participants.find(
+      (item) => item.invite?.codeHash === codeHash || item.claimedCodeHash === codeHash
+    );
+    if (!participant || !group.id) {
+      return { status: 'not-found' };
+    }
+    if (participant.userId === userId) {
+      return { status: 'already-linked-to-self', groupId: group.id };
+    }
+    if (participant.userId) {
+      return { status: 'participant-already-linked' };
+    }
+    if (group.participants.some((item) => item.userId === userId)) {
+      return { status: 'user-already-linked' };
+    }
+
+    const updated = await GiftExchangeGroupModel.updateOne(
+      {
+        _id: group.id,
+        participants: {
+          $elemMatch: {
+            id: participant.id,
+            inviteCodeHash: codeHash,
+            userId: null,
+          },
+        },
+        'participants.userId': { $ne: userId },
+      },
+      {
+        $set: {
+          'participants.$.userId': userId,
+          'participants.$.claimedCodeHash': codeHash,
+          'participants.$.inviteCodeHash': null,
+          'participants.$.inviteCreatedAt': null,
+        },
+      }
+    ).exec();
+
+    if (updated.modifiedCount !== 1) {
+      return this.classifyClaim(codeHash, userId);
+    }
+
+    await GiftExchangeGroupModel.updateOne(
+      { _id: group.id, 'members.userId': { $ne: userId } },
+      { $push: { members: { userId, role: 'member' } } }
+    ).exec();
+
+    return { status: 'claimed', groupId: group.id };
+  }
+
+  private async classifyClaim(
+    codeHash: string,
+    userId: string
+  ): Promise<ClaimInviteOutcome> {
+    const doc = await GiftExchangeGroupModel.findOne({
+      $or: [
+        { 'participants.inviteCodeHash': codeHash },
+        { 'participants.claimedCodeHash': codeHash },
+      ],
+    }).exec();
+    if (!doc) {
+      return { status: 'not-found' };
+    }
+    const group = doc.toEntity();
+    const participant = group.participants.find(
+      (item) => item.invite?.codeHash === codeHash || item.claimedCodeHash === codeHash
+    );
+    if (!participant || !group.id) {
+      return { status: 'not-found' };
+    }
+    if (participant.userId === userId) {
+      return { status: 'already-linked-to-self', groupId: group.id };
+    }
+    if (participant.userId) {
+      return { status: 'participant-already-linked' };
+    }
+    if (group.participants.some((item) => item.userId === userId)) {
+      return { status: 'user-already-linked' };
+    }
+    return { status: 'not-found' };
   }
 }

@@ -47,7 +47,8 @@ export const apiFetch = async <T>(
   })
   const responseBody = await parseBody(response)
   if (!response.ok) {
-    if (response.status === 401 && window.location.pathname !== paths.login()) {
+    const onJoinPage = window.location.pathname.startsWith('/join/')
+    if (response.status === 401 && window.location.pathname !== paths.login() && !onJoinPage) {
       window.location.assign(paths.login())
     }
     throw new ApiError(response.status, failureFrom(responseBody))
