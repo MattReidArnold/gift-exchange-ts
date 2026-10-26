@@ -24,11 +24,9 @@ type PreviewInviteDeps = {
 const previewInvite = ({ groupRepository }: PreviewInviteDeps) => {
   const execute = async (token: string): Promise<PreviewInviteResult> => {
     const codeHash = hashInviteToken(token);
-    const group = await groupRepository.findByPendingInviteHash(codeHash);
-    const participant = group?.participants.find(
-      (item) => item.invite?.codeHash === codeHash
-    );
-    if (!group || !participant) {
+    const group = await groupRepository.findByInviteCodeHash(codeHash);
+    const participant = group?.findParticipantByInviteCode(codeHash);
+    if (!group || !participant?.invite) {
       return err(inviteNotFoundFailure());
     }
     return ok({

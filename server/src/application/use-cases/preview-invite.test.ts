@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { hashInviteToken } from '#src/application/invite-token';
+import claimInvite from '#src/application/use-cases/claim-invite';
 import issueParticipantInvite from '#src/application/use-cases/issue-participant-invite';
 import previewInvite from '#src/application/use-cases/preview-invite';
 import { GroupUseCaseError } from '#src/application/use-cases/group-failures';
@@ -50,10 +50,7 @@ describe('previewInvite', () => {
       { id: 'alice', name: 'Alice' },
     ]);
     const { token } = expectOk(await issue.execute(id, 'alice', 'owner-1'));
-    await groupRepository.claimInvite({
-      codeHash: hashInviteToken(token),
-      userId: 'user-2',
-    });
+    expectOk(await claimInvite({ groupRepository }).execute(token, 'user-2'));
 
     const failure = expectErr(await preview.execute(token));
 

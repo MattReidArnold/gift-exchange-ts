@@ -1,7 +1,4 @@
-import GiftExchangeGroupRepository, {
-  ClaimInviteOutcome,
-} from '#src/application/ports/gift-exchange-group-repository';
-import { GiftExchangeGroupError } from '#src/domain/gift-exchange-group-error';
+import GiftExchangeGroupRepository from '#src/application/ports/gift-exchange-group-repository';
 import GiftExchangeGroup from '#src/domain/gift-exchange-group';
 
 export default class InMemoryGroupRepository
@@ -42,54 +39,12 @@ export default class InMemoryGroupRepository
     return this.groups.delete(id);
   }
 
-  async findByPendingInviteHash(codeHash: string): Promise<GiftExchangeGroup | null> {
+  async findByInviteCodeHash(codeHash: string): Promise<GiftExchangeGroup | null> {
     for (const group of this.groups.values()) {
-      const pending = group.participants.some(
-        (participant) => participant.invite?.codeHash === codeHash && !participant.userId
-      );
-      if (pending) {
+      if (group.findParticipantByInviteCode(codeHash)) {
         return group;
       }
     }
     return null;
-  }
-
-  async claimInvite({
-    codeHash,
-    userId,
-  }: {
-    codeHash: string;
-    userId: string;
-  }): Promise<ClaimInviteOutcome> {
-    const found = [...this.groups.values()].find((group) =>
-      group.participants.some(
-        (participant) =>
-          participant.invite?.codeHash === codeHash ||
-          participant.claimedCodeHash === codeHash
-      )
-    );
-    const participant = found?.participants.find(
-      (item) => item.invite?.codeHash === codeHash || item.claimedCodeHash === codeHash
-    );
-    if (!found?.id || !participant) {
-      return { status: 'not-found' };
-    }
-    if (participant.userId === userId) {
-      return { status: 'already-linked-to-self', groupId: found.id };
-    }
-
-    const result = found.claimInvite(participant.id, userId);
-    if (!result.ok) {
-      switch (result.error.type) {
-        case GiftExchangeGroupError.UserAlreadyLinked:
-          return { status: 'user-already-linked' };
-        case GiftExchangeGroupError.ParticipantAlreadyLinked:
-          return { status: 'participant-already-linked' };
-        default:
-          return { status: 'not-found' };
-      }
-    }
-    this.groups.set(found.id, result.value);
-    return { status: 'claimed', groupId: found.id };
   }
 }

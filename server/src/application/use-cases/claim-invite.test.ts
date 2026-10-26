@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import claimInvite from '#src/application/use-cases/claim-invite';
 import issueParticipantInvite from '#src/application/use-cases/issue-participant-invite';
@@ -58,13 +58,15 @@ describe('claimInvite', () => {
     expect(group?.members).toEqual([{ userId: ownerId, role: 'owner' }]);
   });
 
-  it('succeeds again for the same account', async () => {
+  it('succeeds again for the same account without saving', async () => {
     const { groupId, token } = await issueFor('alice', 'Alice');
     expectOk(await claim.execute(token, 'user-2'));
+    const update = vi.spyOn(groupRepository, 'update');
 
     const again = expectOk(await claim.execute(token, 'user-2'));
 
     expect(again).toEqual({ groupId });
+    expect(update).not.toHaveBeenCalled();
     const group = await groupRepository.getById(groupId);
     expect(group?.members.filter((member) => member.userId === 'user-2')).toHaveLength(1);
   });
@@ -94,8 +96,20 @@ describe('claimInvite', () => {
   });
 
   it('returns not found for an unknown token', async () => {
+    const update = vi.spyOn(groupRepository, 'update');
+
     const failure = expectErr(await claim.execute('missing', 'user-2'));
 
     expect(failure.type).toBe(GroupUseCaseError.InviteNotFound);
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it('returns save failed when the group cannot be saved', async () => {
+    const { token } = await issueFor('alice', 'Alice');
+    vi.spyOn(groupRepository, 'update').mockResolvedValue(null);
+
+    const failure = expectErr(await claim.execute(token, 'user-2'));
+
+    expect(failure.type).toBe(GroupUseCaseError.GroupSaveFailed);
   });
 });

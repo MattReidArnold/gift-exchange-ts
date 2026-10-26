@@ -131,6 +131,15 @@ export default class GiftExchangeGroup {
     return this.participants.find(({ id }) => id === participantId);
   }
 
+  // Matches a pending invite or the hash kept after that invite was claimed.
+  findParticipantByInviteCode(codeHash: string): Participant | undefined {
+    return this.participants.find(
+      (participant) =>
+        participant.invite?.codeHash === codeHash ||
+        participant.claimedCodeHash === codeHash
+    );
+  }
+
   addParticipant({ id, name, exclusions }: NewParticipant): ParticipantResult {
     const participant = new Participant({
       id,

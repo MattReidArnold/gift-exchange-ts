@@ -290,6 +290,17 @@ describe('GiftExchangeGroup.clearInvite', () => {
 });
 
 describe('GiftExchangeGroup.claimInvite', () => {
+  it('finds a participant by a pending or claimed invite code', () => {
+    const pending = groupWithPendingInvite();
+
+    expect(pending.findParticipantByInviteCode('hash-alice')?.id).toBe('alice');
+    expect(pending.findParticipantByInviteCode('missing')).toBeUndefined();
+
+    const claimed = expectOk(pending.claimInvite('alice', 'user-2'));
+
+    expect(claimed.findParticipantByInviteCode('hash-alice')?.id).toBe('alice');
+  });
+
   it('links a new account and adds them as a member', () => {
     const claimed = expectOk(groupWithPendingInvite().claimInvite('alice', 'user-2'));
     const alice = claimed.findParticipant('alice');
@@ -359,6 +370,29 @@ describe('GiftExchangeGroup.claimInvite', () => {
     const failure = expectErr(groupWithAliceAndBob().claimInvite('alice', 'user-2'));
 
     expect(failure.type).toBe(GiftExchangeGroupError.InviteNotPending);
+  });
+
+  it('rejects a claim after the invite is revoked', () => {
+    const cleared = expectOk(groupWithPendingInvite().clearInvite('alice'));
+
+    const failure = expectErr(cleared.claimInvite('alice', 'user-2'));
+
+    expect(failure.type).toBe(GiftExchangeGroupError.InviteNotPending);
+    expect(cleared.findParticipant('alice')?.userId).toBeNull();
+  });
+
+  it('returns not found for an unknown participant', () => {
+    const failure = expectErr(groupWithPendingInvite().claimInvite('unknown', 'user-2'));
+
+    expect(failure.type).toBe(GiftExchangeGroupError.ParticipantNotFound);
+  });
+
+  it('treats a repeated claim with surrounding whitespace as the same account', () => {
+    const claimed = expectOk(groupWithPendingInvite().claimInvite('alice', 'user-2'));
+
+    const again = expectOk(claimed.claimInvite('alice', '  user-2  '));
+
+    expect(again).toBe(claimed);
   });
 });
 

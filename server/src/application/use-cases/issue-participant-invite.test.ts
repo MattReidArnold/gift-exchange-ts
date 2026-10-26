@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { hashInviteToken } from '#src/application/invite-token';
+import claimInvite from '#src/application/use-cases/claim-invite';
 import issueParticipantInvite from '#src/application/use-cases/issue-participant-invite';
 import { GroupUseCaseError } from '#src/application/use-cases/group-failures';
 import { GiftExchangeGroupError } from '#src/domain/gift-exchange-group-error';
@@ -93,10 +94,7 @@ describe('issueParticipantInvite', () => {
       { id: 'alice', name: 'Alice' },
     ]);
     const issued = expectOk(await useCase.execute(id, 'alice', ownerId));
-    await groupRepository.claimInvite({
-      codeHash: hashInviteToken(issued.token),
-      userId: 'user-2',
-    });
+    expectOk(await claimInvite({ groupRepository }).execute(issued.token, 'user-2'));
     const update = vi.spyOn(groupRepository, 'update');
 
     const failure = expectErr(await useCase.execute(id, 'alice', ownerId));
