@@ -109,3 +109,22 @@ export const useRemoveParticipant = (groupId: string) =>
       method: 'DELETE',
     }),
   )
+
+export const useIssueInvite = (groupId: string) => {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (participantId: string) =>
+      apiFetch<{ group: Group; token: string }>(
+        `${participantPath(groupId, participantId)}/invite`,
+        { method: 'POST' },
+      ),
+    onSuccess: ({ group }) => cacheGroup(queryClient, group),
+  })
+}
+
+export const useRevokeInvite = (groupId: string) =>
+  useGroupMutation((participantId: string) =>
+    apiFetch<Group>(`${participantPath(groupId, participantId)}/invite`, {
+      method: 'DELETE',
+    }),
+  )

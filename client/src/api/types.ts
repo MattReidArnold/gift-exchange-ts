@@ -3,6 +3,8 @@ export interface Participant {
   name: string
   // Ids of other participants in the same group this participant must not be matched with.
   exclusions: string[]
+  userId: string | null
+  invitePending: boolean
 }
 
 export type GroupMemberRole = 'owner' | 'member'

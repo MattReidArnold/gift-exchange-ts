@@ -2,9 +2,11 @@ import { Router } from 'express';
 
 import WebContext from '#src/infrastructure/web/web-context';
 import groupController from '#src/infrastructure/web/controllers/group-controller';
+import inviteController from '#src/infrastructure/web/controllers/invite-controller';
 
 const groupRouter = ({ logger, useCases }: WebContext) => {
   const controller = groupController({ logger, ...useCases });
+  const invites = inviteController({ logger, ...useCases });
   const router = Router();
   router.get('/', controller.list);
   router.post('/', controller.create);
@@ -16,6 +18,14 @@ const groupRouter = ({ logger, useCases }: WebContext) => {
   router.delete(
     '/:groupId/participants/:participantId',
     controller.removeMember
+  );
+  router.post(
+    '/:groupId/participants/:participantId/invite',
+    invites.issue
+  );
+  router.delete(
+    '/:groupId/participants/:participantId/invite',
+    invites.revoke
   );
   return router;
 };

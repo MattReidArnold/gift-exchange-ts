@@ -26,7 +26,7 @@ export default class MongoGiftExchangeGroupRepository
   }
   async add(group: GiftExchangeGroup): Promise<GiftExchangeGroup> {
     const doc = await GiftExchangeGroupModel.create({
-      name: group.name,
+      name: group.name.value,
       participants: group.participants.map(toParticipantAttrs),
       members: group.members.map(toMemberAttrs),
     });
@@ -40,7 +40,7 @@ export default class MongoGiftExchangeGroupRepository
     if (!doc) {
       return null;
     }
-    doc.name = group.name;
+    doc.name = group.name.value;
     doc.participants = group.participants.map(toParticipantAttrs);
     doc.members = group.members.map(toMemberAttrs);
     const updatedDoc = await doc.save();
@@ -54,5 +54,12 @@ export default class MongoGiftExchangeGroupRepository
       _id: id,
     }).exec();
     return deletedCount > 0;
+  }
+
+  async findByInviteCodeHash(codeHash: string): Promise<GiftExchangeGroup | null> {
+    const doc = await GiftExchangeGroupModel.findOne({
+      'participants.inviteCodeHash': codeHash,
+    }).exec();
+    return doc ? doc.toEntity() : null;
   }
 }

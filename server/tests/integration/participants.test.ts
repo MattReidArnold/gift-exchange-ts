@@ -31,7 +31,13 @@ describe('POST /api/groups/:groupId/participants', () => {
 
     expect(response.status).toBe(201);
     expect(response.body.participants).toEqual([
-      { id: expect.any(String), name: 'Alice', exclusions: [] },
+      {
+        id: expect.any(String),
+        name: 'Alice',
+        exclusions: [],
+        userId: null,
+        invitePending: false,
+      },
     ]);
   });
 
@@ -108,7 +114,13 @@ describe('DELETE /api/groups/:groupId/participants/:participantId', () => {
 
     expect(response.status).toBe(200);
     expect(response.body.participants).toEqual([
-      { id: alice.id, name: 'Alice', exclusions: [] },
+      {
+        id: alice.id,
+        name: 'Alice',
+        exclusions: [],
+        userId: null,
+        invitePending: false,
+      },
     ]);
   });
 });

@@ -6,4 +6,5 @@ export default interface GiftExchangeGroupRepository {
   add: (group: GiftExchangeGroup) => Promise<GiftExchangeGroup>;
   update: (group: GiftExchangeGroup) => Promise<GiftExchangeGroup | null>;
   delete: (id: string) => Promise<boolean>;
+  findByInviteCodeHash: (codeHash: string) => Promise<GiftExchangeGroup | null>;
 }

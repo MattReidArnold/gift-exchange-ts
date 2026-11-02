@@ -1,5 +1,6 @@
 import GiftExchangeGroupRepository from '#src/application/ports/gift-exchange-group-repository';
 import GiftExchangeGroup from '#src/domain/gift-exchange-group';
+import InviteCodeHash from '#src/domain/invite-code-hash';
 
 export default class InMemoryGroupRepository
   implements GiftExchangeGroupRepository
@@ -37,5 +38,15 @@ export default class InMemoryGroupRepository
 
   async delete(id: string): Promise<boolean> {
     return this.groups.delete(id);
+  }
+
+  async findByInviteCodeHash(codeHash: string): Promise<GiftExchangeGroup | null> {
+    const hash = InviteCodeHash.create(codeHash);
+    for (const group of this.groups.values()) {
+      if (group.findParticipantByInviteCode(hash)) {
+        return group;
+      }
+    }
+    return null;
   }
 }

@@ -1,4 +1,5 @@
 import GiftExchangeGroup from '#src/domain/gift-exchange-group';
+import ParticipantName from '#src/domain/participant-name';
 import {
   GiftExchangeGroupError,
   ParticipantValidationError,
@@ -17,6 +18,7 @@ type UpdateParticipantResult = Result<
   Failure<
     | GroupUseCaseError
     | GiftExchangeGroupError.ParticipantNotFound
+    | GiftExchangeGroupError.ParticipantNameEmpty
     | ParticipantValidationError
   >
 >;
@@ -41,7 +43,16 @@ const updateParticipant = ({ groupRepository }: UpdateParticipantDeps) => {
       return err(groupNotFoundFailure());
     }
 
-    const result = group.updateParticipant(participantId, params);
+    const participantName =
+      params.name === undefined ? undefined : ParticipantName.create(params.name);
+    if (participantName && !participantName.ok) {
+      return participantName;
+    }
+
+    const result = group.updateParticipant(participantId, {
+      name: participantName?.value,
+      exclusions: params.exclusions,
+    });
     if (!result.ok) {
       return result;
     }

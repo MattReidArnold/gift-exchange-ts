@@ -1,5 +1,5 @@
 import { act, screen, waitFor, within } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import type { Group } from '#src/api/types.ts'
 import { ownerMember } from '#src/test/fakeApi.ts'
@@ -10,8 +10,8 @@ const family: Group = {
   name: 'Family',
   members: [ownerMember],
   participants: [
-    { id: 'alice', name: 'Alice', exclusions: [] },
-    { id: 'bob', name: 'Bob', exclusions: ['alice'] },
+    { id: 'alice', name: 'Alice', exclusions: [], userId: null, invitePending: false },
+    { id: 'bob', name: 'Bob', exclusions: ['alice'], userId: null, invitePending: false },
   ],
 }
 
@@ -156,6 +156,58 @@ describe('participants', () => {
     await pageHeading('Participant not found')
   })
 
+  it('shows a linked account and no invite action', async () => {
+    const linked: Group = {
+      ...family,
+      participants: family.participants.map((participant) =>
+        participant.id === 'alice' ? { ...participant, userId: 'user-9' } : participant,
+      ),
+    }
+    renderApp('/groups/family', { groups: [linked] })
+
+    await pageHeading('Family')
+    const list = screen.getByRole('list', { name: 'Participants' })
+    expect(within(list).getByText('Linked')).toBeInTheDocument()
+    expect(
+      within(list).queryByRole('button', { name: 'Invite Alice' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('creates an invite link and shows it once', async () => {
+    const { user } = renderApp('/groups/family', { groups: [family] })
+
+    await user.click(await screen.findByRole('button', { name: 'Invite Alice' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Invite Alice' })
+    await user.click(within(dialog).getByRole('button', { name: 'Create invite link' }))
+
+    const link = await within(dialog).findByRole('textbox', { name: 'Invite link' })
+    expect(link).toHaveValue(`${window.location.origin}/join/issued-alice`)
+    expect(
+      within(dialog).getByText(/Generating another link replaces this one/),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Invite pending')).toBeInTheDocument()
+  })
+
+  it('revokes a pending invite', async () => {
+    const pending: Group = {
+      ...family,
+      participants: family.participants.map((participant) =>
+        participant.id === 'alice' ? { ...participant, invitePending: true } : participant,
+      ),
+    }
+    const { user } = renderApp('/groups/family', { groups: [pending] })
+
+    await user.click(await screen.findByRole('button', { name: 'Invite Alice' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Invite Alice' })
+    expect(
+      within(dialog).getByText(/The previous link cannot be shown again/),
+    ).toBeInTheDocument()
+    await user.click(within(dialog).getByRole('button', { name: 'Revoke invite' }))
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(screen.queryByText('Invite pending')).not.toBeInTheDocument()
+  })
+
   it('deletes a participant after confirmation', async () => {
     const { user } = renderApp('/groups/family', { groups: [family] })
 
@@ -169,6 +221,62 @@ describe('participants', () => {
     const list = screen.getByRole('list', { name: 'Participants' })
     expect(within(list).queryByText('Alice')).not.toBeInTheDocument()
     expect(within(list).getByText('No exclusions')).toBeInTheDocument()
+  })
+})
+
+const familyWithAliceInvited = (): Group => ({
+  ...family,
+  participants: family.participants.map((participant) =>
+    participant.id === 'alice' ? { ...participant, invitePending: true } : participant,
+  ),
+})
+
+describe('joining with an invite', () => {
+  it('asks a signed-out visitor to sign in with Google', async () => {
+    renderApp('/join/alice', { groups: [familyWithAliceInvited()], signedIn: false })
+
+    expect(await screen.findByRole('heading', { name: 'Join Family' })).toBeInTheDocument()
+    expect(screen.getByText(/links your account to Alice/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Sign in with Google' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Link this account' })).not.toBeInTheDocument()
+  })
+
+  it('links a signed-in account and opens the group', async () => {
+    const { user, router } = renderApp('/join/alice', { groups: [familyWithAliceInvited()] })
+
+    expect(await screen.findByText('You are signed in as Ada.')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Link this account' }))
+
+    await pageHeading('Family')
+    expect(router.state.location.pathname).toBe('/groups/family')
+    expect(screen.getByText('Linked')).toBeInTheDocument()
+  })
+
+  it('shows an error for an invalid invite', async () => {
+    renderApp('/join/missing', { signedIn: false })
+
+    expect(await screen.findByRole('heading', { name: 'Invite unavailable' })).toBeInTheDocument()
+    expect(screen.getByText('Invite link is invalid or has already been used')).toBeInTheDocument()
+  })
+
+  it('stays on the join page when the invite request is unauthorized', async () => {
+    const assign = vi.fn()
+    vi.stubGlobal('location', {
+      pathname: '/join/unauthorized',
+      origin: 'http://localhost:3000',
+      href: 'http://localhost:3000/join/unauthorized',
+      assign,
+    })
+    try {
+      renderApp('/join/unauthorized', { signedIn: false })
+
+      expect(
+        await screen.findByRole('heading', { name: 'Invite unavailable' }),
+      ).toBeInTheDocument()
+      expect(assign).not.toHaveBeenCalled()
+    } finally {
+      vi.unstubAllGlobals()
+    }
   })
 })
 

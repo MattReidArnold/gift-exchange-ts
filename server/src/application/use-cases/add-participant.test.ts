@@ -29,10 +29,8 @@ describe('addParticipant', () => {
       await useCase.execute(id, { name: 'Bob', exclusions: ['alice'] })
     );
 
-    expect(group.findParticipant('p1')).toMatchObject({
-      name: 'Bob',
-      exclusions: ['alice'],
-    });
+    expect(group.findParticipant('p1')?.name.value).toBe('Bob');
+    expect(group.findParticipant('p1')?.exclusions).toEqual(['alice']);
     expect(await groupRepository.getById(id)).toEqual(group);
   });
 

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import createGroup from '#src/application/use-cases/create-group';
+import UserId from '#src/domain/user-id';
 import { GiftExchangeGroupError } from '#src/domain/gift-exchange-group-error';
 import { expectErr, expectOk } from '#tests/support/result';
 import InMemoryGroupRepository from '#tests/support/in-memory-group-repository';
@@ -18,8 +19,10 @@ describe('createGroup', () => {
     );
 
     expect(group.id).toBeDefined();
-    expect(group.name).toBe('Family');
-    expect(group.members).toEqual([{ userId: 'owner-1', role: 'owner' }]);
+    expect(group.name.value).toBe('Family');
+    expect(group.members).toEqual([
+      { userId: UserId.create('owner-1'), role: 'owner' },
+    ]);
     expect(await groupRepository.getById(group.id ?? '')).toEqual(group);
   });
 

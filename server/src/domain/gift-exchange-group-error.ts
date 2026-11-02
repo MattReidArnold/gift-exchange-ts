@@ -6,10 +6,12 @@ export enum GiftExchangeGroupError {
   ParticipantNameEmpty = 'PARTICIPANT_NAME_EMPTY',
   ParticipantNameTaken = 'PARTICIPANT_NAME_TAKEN',
   InvalidExclusion = 'INVALID_EXCLUSION',
+  ParticipantAlreadyLinked = 'PARTICIPANT_ALREADY_LINKED',
+  UserAlreadyLinked = 'USER_ALREADY_LINKED',
+  InviteNotPending = 'INVITE_NOT_PENDING',
 }
 
 export type ParticipantValidationError =
-  | GiftExchangeGroupError.ParticipantNameEmpty
   | GiftExchangeGroupError.ParticipantNameTaken
   | GiftExchangeGroupError.InvalidExclusion;
 
@@ -43,3 +45,21 @@ export const invalidExclusionFailure = (
   type: GiftExchangeGroupError.InvalidExclusion,
   reason: `Exclusion '${participantId}' must be another participant in the group`,
 });
+
+export const participantAlreadyLinkedFailure =
+  (): Failure<GiftExchangeGroupError.ParticipantAlreadyLinked> => ({
+    type: GiftExchangeGroupError.ParticipantAlreadyLinked,
+    reason: 'This participant is already linked to an account',
+  });
+
+export const userAlreadyLinkedFailure =
+  (): Failure<GiftExchangeGroupError.UserAlreadyLinked> => ({
+    type: GiftExchangeGroupError.UserAlreadyLinked,
+    reason: 'This account is already linked to another participant in the group',
+  });
+
+export const inviteNotPendingFailure =
+  (): Failure<GiftExchangeGroupError.InviteNotPending> => ({
+    type: GiftExchangeGroupError.InviteNotPending,
+    reason: 'This participant does not have a pending invite',
+  });

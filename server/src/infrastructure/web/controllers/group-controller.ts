@@ -1,17 +1,15 @@
 import { Request, Response, NextFunction } from 'express';
 
-import { GiftExchangeGroupError } from '#src/domain/gift-exchange-group-error';
-import { Failure } from '#src/domain/shared/failure';
 import Logger from '#src/application/ports/logger';
 import { AddParticipantUseCase } from '#src/application/use-cases/add-participant';
 import { CreateGroupUseCase } from '#src/application/use-cases/create-group';
 import { DeleteGroupUseCase } from '#src/application/use-cases/delete-group';
 import { GetGroupUseCase } from '#src/application/use-cases/get-group';
-import { GroupUseCaseError } from '#src/application/use-cases/group-failures';
 import { ListGroupsUseCase } from '#src/application/use-cases/list-groups';
 import { RemoveParticipantUseCase } from '#src/application/use-cases/remove-participant';
 import { RenameGroupUseCase } from '#src/application/use-cases/rename-group';
 import { UpdateParticipantUseCase } from '#src/application/use-cases/update-participant';
+import { sendFailure } from '#src/infrastructure/web/status-for-failure';
 
 type GroupControllerDeps = {
   logger: Logger;
@@ -27,30 +25,6 @@ type GroupControllerDeps = {
 
 type GroupParams = { groupId: string };
 type ParticipantParams = { groupId: string; participantId: string };
-
-type GroupFailure = Failure<GroupUseCaseError | GiftExchangeGroupError>;
-
-const statusForFailure = ({ type }: GroupFailure): number => {
-  switch (type) {
-    case GroupUseCaseError.GroupNotFound:
-    case GiftExchangeGroupError.ParticipantNotFound:
-      return 404;
-    case GroupUseCaseError.GroupSaveFailed:
-      return 500;
-    case GiftExchangeGroupError.GroupNameEmpty:
-    case GiftExchangeGroupError.ParticipantNameEmpty:
-    case GiftExchangeGroupError.ParticipantNameTaken:
-    case GiftExchangeGroupError.InvalidExclusion:
-      return 422;
-    default: {
-      const unhandled: never = type;
-      throw new Error(`No HTTP status mapped for failure ${unhandled}`);
-    }
-  }
-};
-
-const sendFailure = (res: Response, failure: GroupFailure) =>
-  res.status(statusForFailure(failure)).send({ failure });
 
 const stringOrUndefined = (value: unknown): string | undefined =>
   typeof value === 'string' ? value : undefined;
