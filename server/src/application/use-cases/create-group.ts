@@ -1,4 +1,6 @@
 import GiftExchangeGroup from '#src/domain/gift-exchange-group';
+import GroupName from '#src/domain/group-name';
+import UserId from '#src/domain/user-id';
 import { GiftExchangeGroupError } from '#src/domain/gift-exchange-group-error';
 import { Failure } from '#src/domain/shared/failure';
 import { Result, ok } from '#src/domain/shared/result';
@@ -18,11 +20,15 @@ const createGroup = ({ groupRepository }: CreateGroupDeps) => {
     name: string,
     ownerId: string
   ): Promise<CreateGroupResult> => {
-    const result = GiftExchangeGroup.create(name, ownerId);
-    if (!result.ok) {
-      return result;
+    const groupName = GroupName.create(name);
+    if (!groupName.ok) {
+      return groupName;
     }
-    return ok(await groupRepository.add(result.value));
+    return ok(
+      await groupRepository.add(
+        GiftExchangeGroup.create(groupName.value, UserId.create(ownerId))
+      )
+    );
   };
 
   return {

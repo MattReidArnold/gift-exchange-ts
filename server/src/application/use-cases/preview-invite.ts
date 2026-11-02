@@ -1,3 +1,4 @@
+import InviteCodeHash from '#src/domain/invite-code-hash';
 import { Failure } from '#src/domain/shared/failure';
 import { Result, err, ok } from '#src/domain/shared/result';
 import GiftExchangeGroupRepository from '#src/application/ports/gift-exchange-group-repository';
@@ -23,15 +24,15 @@ type PreviewInviteDeps = {
 
 const previewInvite = ({ groupRepository }: PreviewInviteDeps) => {
   const execute = async (token: string): Promise<PreviewInviteResult> => {
-    const codeHash = hashInviteToken(token);
-    const group = await groupRepository.findByInviteCodeHash(codeHash);
+    const codeHash = InviteCodeHash.create(hashInviteToken(token));
+    const group = await groupRepository.findByInviteCodeHash(codeHash.value);
     const participant = group?.findParticipantByInviteCode(codeHash);
-    if (!group || !participant?.invite) {
+    if (!group || !participant?.invitePending) {
       return err(inviteNotFoundFailure());
     }
     return ok({
-      groupName: group.name,
-      participantName: participant.name,
+      groupName: group.name.value,
+      participantName: participant.name.value,
     });
   };
 

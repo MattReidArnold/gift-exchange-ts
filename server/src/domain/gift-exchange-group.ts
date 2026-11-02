@@ -1,41 +1,43 @@
+import InviteCodeHash from '#src/domain/invite-code-hash';
+import GroupName from '#src/domain/group-name';
 import Participant from '#src/domain/participant';
+import ParticipantName from '#src/domain/participant-name';
+import UserId from '#src/domain/user-id';
 import { Failure } from '#src/domain/shared/failure';
 import { Result, err, ok } from '#src/domain/shared/result';
 import {
   GiftExchangeGroupError,
   ParticipantValidationError,
-  groupNameEmptyFailure,
   invalidExclusionFailure,
-  inviteNotPendingFailure,
   participantAlreadyLinkedFailure,
-  participantNameEmptyFailure,
   participantNameTakenFailure,
   participantNotFoundFailure,
   userAlreadyLinkedFailure,
+  inviteNotPendingFailure,
 } from '#src/domain/gift-exchange-group-error';
 
 export type GroupMemberRole = 'owner' | 'member';
 
 export interface GroupMember {
-  userId: string;
+  userId: UserId;
   role: GroupMemberRole;
 }
 
 export interface GiftExchangeGroupParams {
   id?: string;
-  name: string;
+  name: GroupName;
   participants: Participant[];
   members: GroupMember[];
 }
 
 export interface NewParticipant {
   id: string;
-  name: string;
+  name: ParticipantName;
   exclusions: string[];
 }
 
 export interface ParticipantChanges {
-  name?: string;
+  name?: ParticipantName;
   exclusions?: string[];
 }
 
@@ -77,7 +79,7 @@ type ClaimInviteResult = Result<
 
 export default class GiftExchangeGroup {
   readonly id?: string;
-  readonly name: string;
+  readonly name: GroupName;
   readonly participants: Participant[];
   readonly members: GroupMember[];
 
@@ -89,61 +91,37 @@ export default class GiftExchangeGroup {
     this.members = members;
   }
 
-  static create(
-    name: string,
-    ownerId: string
-  ): Result<GiftExchangeGroup, Failure<GiftExchangeGroupError.GroupNameEmpty>> {
-    const trimmedName = name.trim();
-    if (!trimmedName) {
-      return err(groupNameEmptyFailure());
-    }
-    const trimmedOwnerId = ownerId.trim();
-    if (!trimmedOwnerId) {
-      throw new Error('Group owner id cannot be empty');
-    }
-    return ok(
-      new GiftExchangeGroup({
-        name: trimmedName,
-        participants: [],
-        members: [{ userId: trimmedOwnerId, role: 'owner' }],
-      })
-    );
+  static create(name: GroupName, ownerId: UserId): GiftExchangeGroup {
+    return new GiftExchangeGroup({
+      name,
+      participants: [],
+      members: [{ userId: ownerId, role: 'owner' }],
+    });
   }
 
-  rename(
-    name: string
-  ): Result<GiftExchangeGroup, Failure<GiftExchangeGroupError.GroupNameEmpty>> {
-    const trimmedName = name.trim();
-    if (!trimmedName) {
-      return err(groupNameEmptyFailure());
-    }
-    return ok(
-      new GiftExchangeGroup({
-        id: this.id,
-        name: trimmedName,
-        participants: this.participants,
-        members: this.members,
-      })
-    );
+  rename(name: GroupName): GiftExchangeGroup {
+    return new GiftExchangeGroup({
+      id: this.id,
+      name,
+      participants: this.participants,
+      members: this.members,
+    });
   }
 
   findParticipant(participantId: string): Participant | undefined {
     return this.participants.find(({ id }) => id === participantId);
   }
 
-  // Matches a pending invite or the hash kept after that invite was claimed.
-  findParticipantByInviteCode(codeHash: string): Participant | undefined {
-    return this.participants.find(
-      (participant) =>
-        participant.invite?.codeHash === codeHash ||
-        participant.claimedCodeHash === codeHash
+  findParticipantByInviteCode(codeHash: InviteCodeHash): Participant | undefined {
+    return this.participants.find((participant) =>
+      participant.invite?.codeHash.equals(codeHash)
     );
   }
 
   addParticipant({ id, name, exclusions }: NewParticipant): ParticipantResult {
     const participant = new Participant({
       id,
-      name: name.trim(),
+      name,
       exclusions: unique(exclusions),
     });
     return this.withValidParticipant(participant, [
@@ -162,11 +140,10 @@ export default class GiftExchangeGroup {
     }
     const participant = new Participant({
       id: existing.id,
-      name: name?.trim() ?? existing.name,
+      name: name ?? existing.name,
       exclusions: exclusions ? unique(exclusions) : existing.exclusions,
       userId: existing.userId,
       invite: existing.invite,
-      claimedCodeHash: existing.claimedCodeHash,
     });
     return this.withValidParticipant(
       participant,
@@ -190,7 +167,6 @@ export default class GiftExchangeGroup {
             exclusions: p.exclusions.filter((id) => id !== participantId),
             userId: p.userId,
             invite: p.invite,
-            claimedCodeHash: p.claimedCodeHash,
           })
       );
     return ok(this.withParticipants(remaining));
@@ -198,7 +174,7 @@ export default class GiftExchangeGroup {
 
   issueInvite(
     participantId: string,
-    codeHash: string,
+    codeHash: InviteCodeHash,
     createdAt: Date
   ): IssueInviteResult {
     const existing = this.findParticipant(participantId);
@@ -208,17 +184,13 @@ export default class GiftExchangeGroup {
     if (existing.userId) {
       return err(participantAlreadyLinkedFailure());
     }
-    const trimmedHash = codeHash.trim();
-    if (!trimmedHash) {
-      throw new Error('Invite code hash cannot be empty');
-    }
     return ok(
       this.replaceParticipant(
         new Participant({
           id: existing.id,
           name: existing.name,
           exclusions: existing.exclusions,
-          invite: { codeHash: trimmedHash, createdAt },
+          invite: { codeHash, createdAt },
         })
       )
     );
@@ -229,7 +201,7 @@ export default class GiftExchangeGroup {
     if (!existing) {
       return err(participantNotFoundFailure());
     }
-    if (!existing.invite) {
+    if (!existing.invitePending) {
       return err(inviteNotPendingFailure());
     }
     return ok(
@@ -239,36 +211,31 @@ export default class GiftExchangeGroup {
           name: existing.name,
           exclusions: existing.exclusions,
           userId: existing.userId,
-          claimedCodeHash: existing.claimedCodeHash,
         })
       )
     );
   }
 
-  claimInvite(participantId: string, userId: string): ClaimInviteResult {
+  claimInvite(participantId: string, userId: UserId): ClaimInviteResult {
     const existing = this.findParticipant(participantId);
     if (!existing) {
       return err(participantNotFoundFailure());
     }
-    const trimmedUserId = userId.trim();
-    if (!trimmedUserId) {
-      throw new Error('User id cannot be empty');
-    }
-    if (existing.userId === trimmedUserId) {
+    if (existing.userId?.equals(userId)) {
       return ok(this);
     }
     if (existing.userId) {
       return err(participantAlreadyLinkedFailure());
     }
-    if (this.participants.some((participant) => participant.userId === trimmedUserId)) {
+    if (this.participants.some((participant) => participant.userId?.equals(userId))) {
       return err(userAlreadyLinkedFailure());
     }
     if (!existing.invite) {
       return err(inviteNotPendingFailure());
     }
-    const members = this.members.some((member) => member.userId === trimmedUserId)
+    const members = this.members.some((member) => member.userId.equals(userId))
       ? this.members
-      : [...this.members, { userId: trimmedUserId, role: 'member' as const }];
+      : [...this.members, { userId, role: 'member' as const }];
     return ok(
       new GiftExchangeGroup({
         id: this.id,
@@ -279,8 +246,8 @@ export default class GiftExchangeGroup {
                 id: existing.id,
                 name: existing.name,
                 exclusions: existing.exclusions,
-                userId: trimmedUserId,
-                claimedCodeHash: existing.invite?.codeHash ?? null,
+                userId,
+                invite: existing.invite,
               })
             : participant
         ),
@@ -300,9 +267,6 @@ export default class GiftExchangeGroup {
   private validateParticipant(
     participant: Participant
   ): Failure<ParticipantValidationError> | null {
-    if (!participant.name) {
-      return participantNameEmptyFailure();
-    }
     if (this.hasParticipantNamed(participant.name, participant.id)) {
       return participantNameTakenFailure();
     }
@@ -316,12 +280,10 @@ export default class GiftExchangeGroup {
     return null;
   }
 
-  private hasParticipantNamed(name: string, ignoreParticipantId: string) {
-    const normalized = name.toLowerCase();
+  private hasParticipantNamed(name: ParticipantName, ignoreParticipantId: string) {
     return this.participants.some(
       (participant) =>
-        participant.id !== ignoreParticipantId &&
-        participant.name.trim().toLowerCase() === normalized
+        participant.id !== ignoreParticipantId && participant.name.equals(name)
     );
   }
 

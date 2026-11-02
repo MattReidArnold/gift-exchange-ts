@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { hashInviteToken } from '#src/application/invite-token';
 import claimInvite from '#src/application/use-cases/claim-invite';
+import InviteCodeHash from '#src/domain/invite-code-hash';
 import issueParticipantInvite from '#src/application/use-cases/issue-participant-invite';
 import { GroupUseCaseError } from '#src/application/use-cases/group-failures';
 import { GiftExchangeGroupError } from '#src/domain/gift-exchange-group-error';
@@ -35,7 +36,7 @@ describe('issueParticipantInvite', () => {
 
     expect(issued.token).toBe('invite-token-1');
     expect(issued.group.findParticipant('alice')?.invite).toEqual({
-      codeHash: hashInviteToken('invite-token-1'),
+      codeHash: InviteCodeHash.create(hashInviteToken('invite-token-1')),
       createdAt: issuedAt,
     });
     expect(JSON.stringify(issued.group)).not.toContain(issued.token);
@@ -51,7 +52,7 @@ describe('issueParticipantInvite', () => {
     const rotated = expectOk(await useCase.execute(id, 'alice', ownerId));
 
     expect(rotated.token).toBe('invite-token-2');
-    expect(rotated.group.findParticipant('alice')?.invite?.codeHash).toBe(
+    expect(rotated.group.findParticipant('alice')?.invite?.codeHash.value).toBe(
       hashInviteToken('invite-token-2')
     );
   });

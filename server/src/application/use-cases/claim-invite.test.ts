@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { hashInviteToken } from '#src/application/invite-token';
 import claimInvite from '#src/application/use-cases/claim-invite';
 import issueParticipantInvite from '#src/application/use-cases/issue-participant-invite';
 import { GroupUseCaseError } from '#src/application/use-cases/group-failures';
+import UserId from '#src/domain/user-id';
 import { GiftExchangeGroupError } from '#src/domain/gift-exchange-group-error';
 import { expectErr, expectOk } from '#tests/support/result';
 import InMemoryGroupRepository from '#tests/support/in-memory-group-repository';
@@ -40,11 +42,14 @@ describe('claimInvite', () => {
 
     expect(claimed).toEqual({ groupId });
     const group = await groupRepository.getById(groupId);
-    expect(group?.findParticipant('alice')?.userId).toBe('user-2');
-    expect(group?.findParticipant('alice')?.invite).toBeNull();
+    expect(group?.findParticipant('alice')?.userId?.value).toBe('user-2');
+    expect(group?.findParticipant('alice')?.invite?.codeHash.value).toBe(
+      hashInviteToken(token)
+    );
+    expect(group?.findParticipant('alice')?.invitePending).toBe(false);
     expect(group?.members).toEqual([
-      { userId: ownerId, role: 'owner' },
-      { userId: 'user-2', role: 'member' },
+      { userId: UserId.create(ownerId), role: 'owner' },
+      { userId: UserId.create('user-2'), role: 'member' },
     ]);
   });
 
@@ -54,8 +59,10 @@ describe('claimInvite', () => {
     expectOk(await claim.execute(token, ownerId));
 
     const group = await groupRepository.getById(groupId);
-    expect(group?.findParticipant('alice')?.userId).toBe(ownerId);
-    expect(group?.members).toEqual([{ userId: ownerId, role: 'owner' }]);
+    expect(group?.findParticipant('alice')?.userId?.value).toBe(ownerId);
+    expect(group?.members).toEqual([
+      { userId: UserId.create(ownerId), role: 'owner' },
+    ]);
   });
 
   it('succeeds again for the same account without saving', async () => {
@@ -68,7 +75,9 @@ describe('claimInvite', () => {
     expect(again).toEqual({ groupId });
     expect(update).not.toHaveBeenCalled();
     const group = await groupRepository.getById(groupId);
-    expect(group?.members.filter((member) => member.userId === 'user-2')).toHaveLength(1);
+    expect(
+      group?.members.filter((member) => member.userId.equals(UserId.create('user-2')))
+    ).toHaveLength(1);
   });
 
   it('rejects a different account after the participant is linked', async () => {

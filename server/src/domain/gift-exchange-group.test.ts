@@ -1,96 +1,105 @@
 import { describe, expect, it } from 'vitest';
 
 import GiftExchangeGroup from '#src/domain/gift-exchange-group';
+import GroupName from '#src/domain/group-name';
+import InviteCodeHash from '#src/domain/invite-code-hash';
+import ParticipantName from '#src/domain/participant-name';
+import UserId from '#src/domain/user-id';
 import { GiftExchangeGroupError } from '#src/domain/gift-exchange-group-error';
 import { expectErr, expectOk } from '#tests/support/result';
 
 const ownerId = 'owner-1';
 
-const emptyGroup = () => expectOk(GiftExchangeGroup.create('Family', ownerId));
+const groupName = (raw: string) => expectOk(GroupName.create(raw));
+const participantName = (raw: string) => expectOk(ParticipantName.create(raw));
+const userId = (raw: string) => UserId.create(raw);
+const codeHash = (raw: string) => InviteCodeHash.create(raw);
+
+const emptyGroup = () =>
+  GiftExchangeGroup.create(groupName('Family'), userId(ownerId));
 
 const groupWithAliceAndBob = () => {
   const withAlice = expectOk(
-    emptyGroup().addParticipant({ id: 'alice', name: 'Alice', exclusions: [] })
+    emptyGroup().addParticipant({
+      id: 'alice',
+      name: participantName('Alice'),
+      exclusions: [],
+    })
   );
   return expectOk(
-    withAlice.addParticipant({ id: 'bob', name: 'Bob', exclusions: ['alice'] })
+    withAlice.addParticipant({
+      id: 'bob',
+      name: participantName('Bob'),
+      exclusions: ['alice'],
+    })
   );
 };
 
 describe('GiftExchangeGroup.create', () => {
-  it('trims the name and starts with no participants', () => {
-    const group = expectOk(GiftExchangeGroup.create('  Family  ', `  ${ownerId}  `));
+  it('starts with the owner and no participants', () => {
+    const group = GiftExchangeGroup.create(
+      groupName('Family'),
+      userId(`  ${ownerId}  `)
+    );
 
-    expect(group.name).toBe('Family');
+    expect(group.name.value).toBe('Family');
     expect(group.participants).toEqual([]);
-    expect(group.members).toEqual([{ userId: ownerId, role: 'owner' }]);
-  });
-
-  it.each(['', '   '])('rejects the empty name %j', (name) => {
-    const failure = expectErr(GiftExchangeGroup.create(name, ownerId));
-
-    expect(failure.type).toBe(GiftExchangeGroupError.GroupNameEmpty);
+    expect(group.members).toEqual([{ userId: userId(ownerId), role: 'owner' }]);
+    expect(JSON.parse(JSON.stringify(group))).toMatchObject({
+      name: 'Family',
+      members: [{ userId: ownerId, role: 'owner' }],
+    });
   });
 });
 
 describe('GiftExchangeGroup.rename', () => {
-  it('trims the new name and keeps the id and participants', () => {
+  it('replaces the name and keeps the id, participants, and members', () => {
     const group = new GiftExchangeGroup({
       id: 'group-1',
-      name: 'Family',
+      name: groupName('Family'),
       participants: groupWithAliceAndBob().participants,
-      members: [{ userId: ownerId, role: 'owner' }],
+      members: [{ userId: userId(ownerId), role: 'owner' }],
     });
 
-    const renamed = expectOk(group.rename('  Friends  '));
+    const renamed = group.rename(groupName('Friends'));
 
     expect(renamed.id).toBe('group-1');
-    expect(renamed.name).toBe('Friends');
+    expect(renamed.name.value).toBe('Friends');
     expect(renamed.participants).toEqual(group.participants);
     expect(renamed.members).toEqual(group.members);
-  });
-
-  it.each(['', '   '])('rejects the empty name %j', (name) => {
-    const failure = expectErr(emptyGroup().rename(name));
-
-    expect(failure.type).toBe(GiftExchangeGroupError.GroupNameEmpty);
   });
 });
 
 describe('GiftExchangeGroup.addParticipant', () => {
-  it('trims the name and removes duplicate exclusions', () => {
+  it('removes duplicate exclusions', () => {
     const group = expectOk(
-      emptyGroup().addParticipant({ id: 'alice', name: 'Alice', exclusions: [] })
+      emptyGroup().addParticipant({
+        id: 'alice',
+        name: participantName('Alice'),
+        exclusions: [],
+      })
     );
 
     const updated = expectOk(
       group.addParticipant({
         id: 'bob',
-        name: '  Bob  ',
+        name: participantName('Bob'),
         exclusions: ['alice', 'alice'],
       })
     );
 
     expect(updated.findParticipant('bob')).toMatchObject({
-      name: 'Bob',
+      name: participantName('Bob'),
       exclusions: ['alice'],
     });
     expect(updated.members).toEqual(group.members);
-  });
-
-  it('rejects an empty name', () => {
-    const failure = expectErr(
-      emptyGroup().addParticipant({ id: 'alice', name: '  ', exclusions: [] })
-    );
-
-    expect(failure.type).toBe(GiftExchangeGroupError.ParticipantNameEmpty);
   });
 
   it('rejects a name already used in the group, ignoring case', () => {
     const failure = expectErr(
       groupWithAliceAndBob().addParticipant({
         id: 'carol',
-        name: ' alice ',
+        name: participantName(' alice '),
         exclusions: [],
       })
     );
@@ -102,7 +111,7 @@ describe('GiftExchangeGroup.addParticipant', () => {
     const failure = expectErr(
       groupWithAliceAndBob().addParticipant({
         id: 'carol',
-        name: 'Carol',
+        name: participantName('Carol'),
         exclusions: ['unknown'],
       })
     );
@@ -114,7 +123,7 @@ describe('GiftExchangeGroup.addParticipant', () => {
     const failure = expectErr(
       groupWithAliceAndBob().addParticipant({
         id: 'carol',
-        name: 'Carol',
+        name: participantName('Carol'),
         exclusions: ['carol'],
       })
     );
@@ -126,7 +135,9 @@ describe('GiftExchangeGroup.addParticipant', () => {
 describe('GiftExchangeGroup.updateParticipant', () => {
   it('returns not found for an unknown participant', () => {
     const failure = expectErr(
-      groupWithAliceAndBob().updateParticipant('unknown', { name: 'X' })
+      groupWithAliceAndBob().updateParticipant('unknown', {
+        name: participantName('X'),
+      })
     );
 
     expect(failure.type).toBe(GiftExchangeGroupError.ParticipantNotFound);
@@ -134,11 +145,13 @@ describe('GiftExchangeGroup.updateParticipant', () => {
 
   it('keeps fields that were not provided', () => {
     const renamed = expectOk(
-      groupWithAliceAndBob().updateParticipant('bob', { name: 'Robert' })
+      groupWithAliceAndBob().updateParticipant('bob', {
+        name: participantName('Robert'),
+      })
     );
 
     expect(renamed.findParticipant('bob')).toMatchObject({
-      name: 'Robert',
+      name: participantName('Robert'),
       exclusions: ['alice'],
     });
 
@@ -147,14 +160,16 @@ describe('GiftExchangeGroup.updateParticipant', () => {
     );
 
     expect(reExcluded.findParticipant('bob')).toMatchObject({
-      name: 'Bob',
+      name: participantName('Bob'),
       exclusions: [],
     });
   });
 
   it("rejects renaming to another participant's name", () => {
     const failure = expectErr(
-      groupWithAliceAndBob().updateParticipant('bob', { name: 'ALICE' })
+      groupWithAliceAndBob().updateParticipant('bob', {
+        name: participantName('ALICE'),
+      })
     );
 
     expect(failure.type).toBe(GiftExchangeGroupError.ParticipantNameTaken);
@@ -162,10 +177,12 @@ describe('GiftExchangeGroup.updateParticipant', () => {
 
   it('allows changing the case of their own name', () => {
     const updated = expectOk(
-      groupWithAliceAndBob().updateParticipant('bob', { name: 'BOB' })
+      groupWithAliceAndBob().updateParticipant('bob', {
+        name: participantName('BOB'),
+      })
     );
 
-    expect(updated.findParticipant('bob')?.name).toBe('BOB');
+    expect(updated.findParticipant('bob')?.name.value).toBe('BOB');
   });
 
   it('rejects excluding themselves', () => {
@@ -181,9 +198,7 @@ describe('GiftExchangeGroup.updateParticipant', () => {
 
 describe('GiftExchangeGroup.removeParticipant', () => {
   it('returns not found for an unknown participant', () => {
-    const failure = expectErr(
-      groupWithAliceAndBob().removeParticipant('unknown')
-    );
+    const failure = expectErr(groupWithAliceAndBob().removeParticipant('unknown'));
 
     expect(failure.type).toBe(GiftExchangeGroupError.ParticipantNotFound);
   });
@@ -205,13 +220,20 @@ describe('GiftExchangeGroup immutability', () => {
     const group = groupWithAliceAndBob();
     const snapshot = structuredClone(group);
 
-    group.addParticipant({ id: 'carol', name: 'Carol', exclusions: ['alice'] });
-    group.updateParticipant('bob', { name: 'Robert', exclusions: [] });
+    group.addParticipant({
+      id: 'carol',
+      name: participantName('Carol'),
+      exclusions: ['alice'],
+    });
+    group.updateParticipant('bob', {
+      name: participantName('Robert'),
+      exclusions: [],
+    });
     group.removeParticipant('alice');
-    group.rename('Friends');
-    group.issueInvite('alice', 'hash-alice', issuedAt);
+    group.rename(groupName('Friends'));
+    group.issueInvite('alice', codeHash('hash-alice'), issuedAt);
     group.clearInvite('alice');
-    group.claimInvite('bob', 'user-2');
+    group.claimInvite('bob', userId('user-2'));
 
     expect(structuredClone(group)).toEqual(snapshot);
   });
@@ -220,14 +242,19 @@ describe('GiftExchangeGroup immutability', () => {
 const issuedAt = new Date('2026-01-01T00:00:00.000Z');
 
 const groupWithPendingInvite = () =>
-  expectOk(groupWithAliceAndBob().issueInvite('alice', 'hash-alice', issuedAt));
+  expectOk(
+    groupWithAliceAndBob().issueInvite('alice', codeHash('hash-alice'), issuedAt)
+  );
 
 describe('GiftExchangeGroup.issueInvite', () => {
   it('stores a pending invite without linking an account', () => {
     const group = groupWithPendingInvite();
     const alice = group.findParticipant('alice');
 
-    expect(alice?.invite).toEqual({ codeHash: 'hash-alice', createdAt: issuedAt });
+    expect(alice?.invite).toEqual({
+      codeHash: codeHash('hash-alice'),
+      createdAt: issuedAt,
+    });
     expect(alice?.userId).toBeNull();
     expect(alice?.toJSON()).toEqual({
       id: 'alice',
@@ -241,24 +268,28 @@ describe('GiftExchangeGroup.issueInvite', () => {
 
   it('replaces a pending invite', () => {
     const rotated = expectOk(
-      groupWithPendingInvite().issueInvite('alice', 'hash-next', issuedAt)
+      groupWithPendingInvite().issueInvite('alice', codeHash('hash-next'), issuedAt)
     );
 
-    expect(rotated.findParticipant('alice')?.invite?.codeHash).toBe('hash-next');
+    expect(rotated.findParticipant('alice')?.invite?.codeHash.value).toBe('hash-next');
   });
 
   it('returns not found for an unknown participant', () => {
     const failure = expectErr(
-      groupWithAliceAndBob().issueInvite('unknown', 'hash', issuedAt)
+      groupWithAliceAndBob().issueInvite('unknown', codeHash('hash'), issuedAt)
     );
 
     expect(failure.type).toBe(GiftExchangeGroupError.ParticipantNotFound);
   });
 
   it('rejects an invite for a linked participant', () => {
-    const claimed = expectOk(groupWithPendingInvite().claimInvite('alice', 'user-2'));
+    const claimed = expectOk(
+      groupWithPendingInvite().claimInvite('alice', userId('user-2'))
+    );
 
-    const failure = expectErr(claimed.issueInvite('alice', 'hash-next', issuedAt));
+    const failure = expectErr(
+      claimed.issueInvite('alice', codeHash('hash-next'), issuedAt)
+    );
 
     expect(failure.type).toBe(GiftExchangeGroupError.ParticipantAlreadyLinked);
   });
@@ -267,13 +298,13 @@ describe('GiftExchangeGroup.issueInvite', () => {
 describe('GiftExchangeGroup.clearInvite', () => {
   it('removes the pending invite and leaves the other participants alone', () => {
     const issued = expectOk(
-      groupWithPendingInvite().issueInvite('bob', 'hash-bob', issuedAt)
+      groupWithPendingInvite().issueInvite('bob', codeHash('hash-bob'), issuedAt)
     );
 
     const cleared = expectOk(issued.clearInvite('alice'));
 
     expect(cleared.findParticipant('alice')?.invite).toBeNull();
-    expect(cleared.findParticipant('bob')?.invite?.codeHash).toBe('hash-bob');
+    expect(cleared.findParticipant('bob')?.invite?.codeHash.value).toBe('hash-bob');
   });
 
   it('returns not found for an unknown participant', () => {
@@ -287,39 +318,61 @@ describe('GiftExchangeGroup.clearInvite', () => {
 
     expect(failure.type).toBe(GiftExchangeGroupError.InviteNotPending);
   });
+
+  it('rejects clearing after the invite is claimed', () => {
+    const claimed = expectOk(
+      groupWithPendingInvite().claimInvite('alice', userId('user-2'))
+    );
+
+    const failure = expectErr(claimed.clearInvite('alice'));
+
+    expect(failure.type).toBe(GiftExchangeGroupError.InviteNotPending);
+    expect(claimed.findParticipant('alice')?.invite?.codeHash.value).toBe('hash-alice');
+  });
 });
 
 describe('GiftExchangeGroup.claimInvite', () => {
   it('finds a participant by a pending or claimed invite code', () => {
     const pending = groupWithPendingInvite();
 
-    expect(pending.findParticipantByInviteCode('hash-alice')?.id).toBe('alice');
-    expect(pending.findParticipantByInviteCode('missing')).toBeUndefined();
+    expect(pending.findParticipantByInviteCode(codeHash('hash-alice'))?.id).toBe(
+      'alice'
+    );
+    expect(pending.findParticipantByInviteCode(codeHash('missing'))).toBeUndefined();
 
-    const claimed = expectOk(pending.claimInvite('alice', 'user-2'));
+    const claimed = expectOk(pending.claimInvite('alice', userId('user-2')));
 
-    expect(claimed.findParticipantByInviteCode('hash-alice')?.id).toBe('alice');
+    expect(claimed.findParticipantByInviteCode(codeHash('hash-alice'))?.id).toBe(
+      'alice'
+    );
   });
 
   it('links a new account and adds them as a member', () => {
-    const claimed = expectOk(groupWithPendingInvite().claimInvite('alice', 'user-2'));
+    const claimed = expectOk(
+      groupWithPendingInvite().claimInvite('alice', userId('user-2'))
+    );
     const alice = claimed.findParticipant('alice');
 
-    expect(alice?.userId).toBe('user-2');
-    expect(alice?.invite).toBeNull();
-    expect(alice?.claimedCodeHash).toBe('hash-alice');
+    expect(alice?.userId?.value).toBe('user-2');
+    expect(alice?.invite).toEqual({
+      codeHash: codeHash('hash-alice'),
+      createdAt: issuedAt,
+    });
     expect(alice?.toJSON().invitePending).toBe(false);
+    expect(JSON.stringify(claimed)).not.toContain('hash-alice');
     expect(claimed.members).toEqual([
-      { userId: ownerId, role: 'owner' },
-      { userId: 'user-2', role: 'member' },
+      { userId: userId(ownerId), role: 'owner' },
+      { userId: userId('user-2'), role: 'member' },
     ]);
   });
 
   it('links the owner without adding a second membership', () => {
-    const claimed = expectOk(groupWithPendingInvite().claimInvite('alice', `  ${ownerId}  `));
+    const claimed = expectOk(
+      groupWithPendingInvite().claimInvite('alice', userId(`  ${ownerId}  `))
+    );
 
-    expect(claimed.findParticipant('alice')?.userId).toBe(ownerId);
-    expect(claimed.members).toEqual([{ userId: ownerId, role: 'owner' }]);
+    expect(claimed.findParticipant('alice')?.userId).toEqual(userId(ownerId));
+    expect(claimed.members).toEqual([{ userId: userId(ownerId), role: 'owner' }]);
   });
 
   it('links an existing member without changing their role', () => {
@@ -329,45 +382,55 @@ describe('GiftExchangeGroup.claimInvite', () => {
       name: pending.name,
       participants: pending.participants,
       members: [
-        { userId: ownerId, role: 'owner' },
-        { userId: 'member-1', role: 'member' },
+        { userId: userId(ownerId), role: 'owner' },
+        { userId: userId('member-1'), role: 'member' },
       ],
     });
 
-    const claimed = expectOk(group.claimInvite('alice', 'member-1'));
+    const claimed = expectOk(group.claimInvite('alice', userId('member-1')));
 
-    expect(claimed.findParticipant('alice')?.userId).toBe('member-1');
+    expect(claimed.findParticipant('alice')?.userId?.value).toBe('member-1');
     expect(claimed.members).toEqual(group.members);
   });
 
   it('succeeds again for the account that already claimed it', () => {
-    const claimed = expectOk(groupWithPendingInvite().claimInvite('alice', 'user-2'));
+    const claimed = expectOk(
+      groupWithPendingInvite().claimInvite('alice', userId('user-2'))
+    );
 
-    const again = expectOk(claimed.claimInvite('alice', 'user-2'));
+    const again = expectOk(claimed.claimInvite('alice', userId('user-2')));
 
     expect(again).toBe(claimed);
   });
 
   it('rejects a different account once the participant is linked', () => {
-    const claimed = expectOk(groupWithPendingInvite().claimInvite('alice', 'user-2'));
+    const claimed = expectOk(
+      groupWithPendingInvite().claimInvite('alice', userId('user-2'))
+    );
 
-    const failure = expectErr(claimed.claimInvite('alice', 'user-3'));
+    const failure = expectErr(claimed.claimInvite('alice', userId('user-3')));
 
     expect(failure.type).toBe(GiftExchangeGroupError.ParticipantAlreadyLinked);
   });
 
   it('rejects an account already linked to another participant', () => {
-    const claimed = expectOk(groupWithPendingInvite().claimInvite('alice', 'user-2'));
-    const withBob = expectOk(claimed.issueInvite('bob', 'hash-bob', issuedAt));
+    const claimed = expectOk(
+      groupWithPendingInvite().claimInvite('alice', userId('user-2'))
+    );
+    const withBob = expectOk(
+      claimed.issueInvite('bob', codeHash('hash-bob'), issuedAt)
+    );
 
-    const failure = expectErr(withBob.claimInvite('bob', 'user-2'));
+    const failure = expectErr(withBob.claimInvite('bob', userId('user-2')));
 
     expect(failure.type).toBe(GiftExchangeGroupError.UserAlreadyLinked);
     expect(withBob.findParticipant('bob')?.userId).toBeNull();
   });
 
   it('rejects a claim when no invite is pending', () => {
-    const failure = expectErr(groupWithAliceAndBob().claimInvite('alice', 'user-2'));
+    const failure = expectErr(
+      groupWithAliceAndBob().claimInvite('alice', userId('user-2'))
+    );
 
     expect(failure.type).toBe(GiftExchangeGroupError.InviteNotPending);
   });
@@ -375,22 +438,26 @@ describe('GiftExchangeGroup.claimInvite', () => {
   it('rejects a claim after the invite is revoked', () => {
     const cleared = expectOk(groupWithPendingInvite().clearInvite('alice'));
 
-    const failure = expectErr(cleared.claimInvite('alice', 'user-2'));
+    const failure = expectErr(cleared.claimInvite('alice', userId('user-2')));
 
     expect(failure.type).toBe(GiftExchangeGroupError.InviteNotPending);
     expect(cleared.findParticipant('alice')?.userId).toBeNull();
   });
 
   it('returns not found for an unknown participant', () => {
-    const failure = expectErr(groupWithPendingInvite().claimInvite('unknown', 'user-2'));
+    const failure = expectErr(
+      groupWithPendingInvite().claimInvite('unknown', userId('user-2'))
+    );
 
     expect(failure.type).toBe(GiftExchangeGroupError.ParticipantNotFound);
   });
 
   it('treats a repeated claim with surrounding whitespace as the same account', () => {
-    const claimed = expectOk(groupWithPendingInvite().claimInvite('alice', 'user-2'));
+    const claimed = expectOk(
+      groupWithPendingInvite().claimInvite('alice', userId('user-2'))
+    );
 
-    const again = expectOk(claimed.claimInvite('alice', '  user-2  '));
+    const again = expectOk(claimed.claimInvite('alice', userId('  user-2  ')));
 
     expect(again).toBe(claimed);
   });
@@ -399,37 +466,42 @@ describe('GiftExchangeGroup.claimInvite', () => {
 describe('participant account link', () => {
   it('keeps the link and pending invite when other fields change', () => {
     const updated = expectOk(
-      groupWithPendingInvite().updateParticipant('alice', { name: 'Alicia' })
+      groupWithPendingInvite().updateParticipant('alice', {
+        name: participantName('Alicia'),
+      })
     );
 
     expect(updated.findParticipant('alice')).toMatchObject({
-      name: 'Alicia',
+      name: participantName('Alicia'),
       userId: null,
-      invite: { codeHash: 'hash-alice', createdAt: issuedAt },
+      invite: { codeHash: codeHash('hash-alice'), createdAt: issuedAt },
     });
   });
 
   it('keeps the linked account when the participant is renamed', () => {
-    const claimed = expectOk(groupWithPendingInvite().claimInvite('alice', 'user-2'));
+    const claimed = expectOk(
+      groupWithPendingInvite().claimInvite('alice', userId('user-2'))
+    );
 
-    const updated = expectOk(claimed.updateParticipant('alice', { name: 'Alicia' }));
+    const updated = expectOk(
+      claimed.updateParticipant('alice', { name: participantName('Alicia') })
+    );
 
     expect(updated.findParticipant('alice')).toMatchObject({
-      name: 'Alicia',
-      userId: 'user-2',
-      invite: null,
-      claimedCodeHash: 'hash-alice',
+      name: participantName('Alicia'),
+      userId: userId('user-2'),
+      invite: { codeHash: codeHash('hash-alice'), createdAt: issuedAt },
     });
   });
 
   it('drops a pending invite when the participant is removed', () => {
     const issued = expectOk(
-      groupWithPendingInvite().issueInvite('bob', 'hash-bob', issuedAt)
+      groupWithPendingInvite().issueInvite('bob', codeHash('hash-bob'), issuedAt)
     );
 
     const updated = expectOk(issued.removeParticipant('alice'));
 
     expect(updated.findParticipant('alice')).toBeUndefined();
-    expect(updated.findParticipant('bob')?.invite?.codeHash).toBe('hash-bob');
+    expect(updated.findParticipant('bob')?.invite?.codeHash.value).toBe('hash-bob');
   });
 });

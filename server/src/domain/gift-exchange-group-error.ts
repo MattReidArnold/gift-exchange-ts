@@ -12,7 +12,6 @@ export enum GiftExchangeGroupError {
 }
 
 export type ParticipantValidationError =
-  | GiftExchangeGroupError.ParticipantNameEmpty
   | GiftExchangeGroupError.ParticipantNameTaken
   | GiftExchangeGroupError.InvalidExclusion;
 

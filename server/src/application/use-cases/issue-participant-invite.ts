@@ -1,4 +1,5 @@
 import GiftExchangeGroup from '#src/domain/gift-exchange-group';
+import InviteCodeHash from '#src/domain/invite-code-hash';
 import { GiftExchangeGroupError } from '#src/domain/gift-exchange-group-error';
 import { Failure } from '#src/domain/shared/failure';
 import { Result, err, ok } from '#src/domain/shared/result';
@@ -49,7 +50,11 @@ const issueParticipantInvite = ({
     }
 
     const token = inviteTokens.create();
-    const issued = loaded.value.issueInvite(participantId, hashInviteToken(token), now());
+    const issued = loaded.value.issueInvite(
+      participantId,
+      InviteCodeHash.create(hashInviteToken(token)),
+      now()
+    );
     if (!issued.ok) {
       return issued;
     }

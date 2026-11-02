@@ -1,4 +1,5 @@
 import GiftExchangeGroup from '#src/domain/gift-exchange-group';
+import GroupName from '#src/domain/group-name';
 import { GiftExchangeGroupError } from '#src/domain/gift-exchange-group-error';
 import { Failure } from '#src/domain/shared/failure';
 import { Result, err, ok } from '#src/domain/shared/result';
@@ -28,12 +29,12 @@ const renameGroup = ({ groupRepository }: RenameGroupDeps) => {
       return err(groupNotFoundFailure());
     }
 
-    const result = group.rename(name);
-    if (!result.ok) {
-      return result;
+    const groupName = GroupName.create(name);
+    if (!groupName.ok) {
+      return groupName;
     }
 
-    const savedGroup = await groupRepository.update(result.value);
+    const savedGroup = await groupRepository.update(group.rename(groupName.value));
     return savedGroup ? ok(savedGroup) : err(groupSaveFailedFailure());
   };
 

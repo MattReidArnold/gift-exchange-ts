@@ -1,5 +1,9 @@
 import GiftExchangeGroup from '#src/domain/gift-exchange-group';
-import { ParticipantValidationError } from '#src/domain/gift-exchange-group-error';
+import ParticipantName from '#src/domain/participant-name';
+import {
+  GiftExchangeGroupError,
+  ParticipantValidationError,
+} from '#src/domain/gift-exchange-group-error';
 import { Failure } from '#src/domain/shared/failure';
 import { Result, err, ok } from '#src/domain/shared/result';
 import GiftExchangeGroupRepository from '#src/application/ports/gift-exchange-group-repository';
@@ -12,7 +16,11 @@ import {
 
 type AddParticipantResult = Result<
   GiftExchangeGroup,
-  Failure<GroupUseCaseError | ParticipantValidationError>
+  Failure<
+    | GroupUseCaseError
+    | GiftExchangeGroupError.ParticipantNameEmpty
+    | ParticipantValidationError
+  >
 >;
 
 type AddParticipantParams = {
@@ -35,9 +43,14 @@ const addParticipant = ({ groupRepository, idGenerator }: AddParticipantDeps) =>
       return err(groupNotFoundFailure());
     }
 
+    const participantName = ParticipantName.create(name);
+    if (!participantName.ok) {
+      return participantName;
+    }
+
     const result = group.addParticipant({
       id: idGenerator.generate(),
-      name,
+      name: participantName.value,
       exclusions,
     });
     if (!result.ok) {

@@ -24,7 +24,7 @@ describe('renameGroup', () => {
   it('renames the group and saves it', async () => {
     const group = expectOk(await useCase.execute(groupId, '  Friends  '));
 
-    expect(group.name).toBe('Friends');
+    expect(group.name.value).toBe('Friends');
     expect(group.participants.map(({ id }) => id)).toEqual(['alice']);
     expect(await groupRepository.getById(groupId)).toEqual(group);
   });

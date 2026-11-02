@@ -13,20 +13,14 @@ They're almost always used together as `Result<T, Failure<SomeError>>`.
 
 ## Common patterns
 
-**Return a success or a failure.** From [`GiftExchangeGroup.create`](../gift-exchange-group.ts):
+**Return a success or a failure.** From [`GroupName.create`](../group-name.ts). Blank text is decided here, and [`GiftExchangeGroup.create`](../gift-exchange-group.ts) accepts the value object:
 
 ```ts
-const trimmedName = name.trim();
-if (!trimmedName) {
+const value = raw.trim();
+if (!value) {
   return err(groupNameEmptyFailure());
 }
-return ok(
-  new GiftExchangeGroup({
-    name: trimmedName,
-    participants: [],
-    members: [{ userId: ownerId, role: 'owner' }],
-  })
-);
+return ok(new GroupName(value));
 ```
 
 **Pass a failure up.** Check `ok`, and return the result unchanged if it failed. TypeScript only lets you read `result.value` after the check. From [`update-participant.ts`](../../application/use-cases/update-participant.ts):

@@ -50,6 +50,7 @@ describe('revokeParticipantInvite', () => {
     expect(update).not.toHaveBeenCalled();
     expect(
       (await groupRepository.getById(id))?.findParticipant('alice')?.invite?.codeHash
+        .value
     ).toBe(hashInviteToken('invite-token-1'));
   });
 
