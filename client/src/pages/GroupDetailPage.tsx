@@ -1,7 +1,11 @@
 import AddIcon from '@mui/icons-material/Add'
+import CasinoIcon from '@mui/icons-material/Casino'
 import DeleteIcon from '@mui/icons-material/Delete'
 import EditIcon from '@mui/icons-material/Edit'
 import LinkIcon from '@mui/icons-material/Link'
+import LockIcon from '@mui/icons-material/Lock'
+import LockOpenIcon from '@mui/icons-material/LockOpen'
+import Alert from '@mui/material/Alert'
 import Breadcrumbs from '@mui/material/Breadcrumbs'
 import Button from '@mui/material/Button'
 import Chip from '@mui/material/Chip'
@@ -27,13 +31,17 @@ import {
   groupQuery,
   useAddParticipant,
   useDeleteGroup,
+  useGenerateMatches,
   useIssueInvite,
+  useLockGroup,
   useRemoveParticipant,
   useRenameGroup,
   useRevokeInvite,
+  useUnlockGroup,
   useUpdateParticipant,
 } from '#src/api/groups.ts'
-import type { Group, Participant } from '#src/api/types.ts'
+import { sessionQuery } from '#src/api/session.ts'
+import type { Group, Match, Participant } from '#src/api/types.ts'
 import { ConfirmDialog } from '#src/components/ConfirmDialog.tsx'
 import { GroupFormDialog } from '#src/components/GroupFormDialog.tsx'
 import { InviteDialog } from '#src/components/InviteDialog.tsx'
@@ -44,6 +52,14 @@ const useGroup = () => {
   const { groupId = '' } = useParams()
   return useSuspenseQuery(groupQuery(groupId)).data
 }
+
+const useCurrentUser = () => useSuspenseQuery(sessionQuery()).data
+
+const participantName = (group: Group, participantId: string) =>
+  group.participants.find(({ id }) => id === participantId)?.name ?? 'Unknown'
+
+const matchLabel = (group: Group, match: Match) =>
+  `${participantName(group, match.giverId)} → ${participantName(group, match.receiverId)}`
 
 const otherParticipants = (group: Group, participantId?: string) =>
   group.participants.filter(({ id }) => id !== participantId)
@@ -73,15 +89,24 @@ function ExclusionChips({ group, participant }: { group: Group; participant: Par
 
 export function GroupDetailPage() {
   const group = useGroup()
+  const user = useCurrentUser()
   const navigate = useNavigate()
   const deleteGroup = useDeleteGroup()
   const removeParticipant = useRemoveParticipant(group.id)
+  const lockGroup = useLockGroup(group.id)
+  const unlockGroup = useUnlockGroup(group.id)
+  const generateMatches = useGenerateMatches(group.id)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [confirmingLock, setConfirmingLock] = useState(false)
+  const [confirmingUnlock, setConfirmingUnlock] = useState(false)
+  const [confirmingDraw, setConfirmingDraw] = useState(false)
   const [participantToRemove, setParticipantToRemove] = useState<Participant | null>(null)
   const [inviteTarget, setInviteTarget] = useState<Participant | null>(null)
   const [inviteToken, setInviteToken] = useState<string | null>(null)
   const issueInvite = useIssueInvite(group.id)
   const revokeInvite = useRevokeInvite(group.id)
+  const isOwner =
+    !!user && group.members.some(({ userId, role }) => userId === user.id && role === 'owner')
 
   const handleDeleteGroup = () =>
     deleteGroup.mutate(group.id, {
@@ -139,7 +164,35 @@ export function GroupDetailPage() {
         <Typography variant="h4" component="h1">
           {group.name}
         </Typography>
-        <Stack direction="row" spacing={1}>
+        <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
+          {isOwner && !group.locked ? (
+            <Button
+              onClick={() => setConfirmingLock(true)}
+              variant="outlined"
+              startIcon={<LockIcon />}
+              disabled={group.participants.length < 2}
+            >
+              Lock group
+            </Button>
+          ) : null}
+          {isOwner && group.locked ? (
+            <>
+              <Button
+                onClick={() => setConfirmingDraw(true)}
+                variant="contained"
+                startIcon={<CasinoIcon />}
+              >
+                {group.matches.length > 0 ? 'Redraw matches' : 'Generate matches'}
+              </Button>
+              <Button
+                onClick={() => setConfirmingUnlock(true)}
+                variant="outlined"
+                startIcon={<LockOpenIcon />}
+              >
+                Unlock group
+              </Button>
+            </>
+          ) : null}
           <Button
             component={RouterLink}
             to={paths.renameGroup(group.id)}
@@ -159,6 +212,40 @@ export function GroupDetailPage() {
         </Stack>
       </Stack>
 
+      {group.locked ? (
+        <Alert severity="info" icon={<LockIcon fontSize="inherit" />}>
+          This group is locked. No new participants can be added.
+        </Alert>
+      ) : null}
+
+      <Stack component="section" aria-labelledby="matches-heading" spacing={2}>
+        <Typography id="matches-heading" variant="h5" component="h2">
+          Matches
+        </Typography>
+        {group.matches.length === 0 ? (
+          <Typography color="text.secondary">
+            {group.locked
+              ? 'No matches yet. Generate a draw when you are ready.'
+              : 'Lock the group when the participant list is final, then generate matches.'}
+          </Typography>
+        ) : (
+          <Paper variant="outlined">
+            <List aria-label="Matches" disablePadding>
+              {group.matches.map((match) => (
+                <ListItem key={`${match.giverId}-${match.receiverId}`} divider>
+                  <ListItemText primary={matchLabel(group, match)} />
+                </ListItem>
+              ))}
+            </List>
+          </Paper>
+        )}
+        {lockGroup.error || unlockGroup.error || generateMatches.error ? (
+          <Alert severity="error">
+            {(lockGroup.error ?? unlockGroup.error ?? generateMatches.error)?.message}
+          </Alert>
+        ) : null}
+      </Stack>
+
       <Stack component="section" aria-labelledby="participants-heading" spacing={2}>
         <Stack
           direction="row"
@@ -168,14 +255,16 @@ export function GroupDetailPage() {
           <Typography id="participants-heading" variant="h5" component="h2">
             Participants
           </Typography>
-          <Button
-            component={RouterLink}
-            to={paths.newParticipant(group.id)}
-            variant="contained"
-            startIcon={<AddIcon />}
-          >
-            Add participant
-          </Button>
+          {group.locked ? null : (
+            <Button
+              component={RouterLink}
+              to={paths.newParticipant(group.id)}
+              variant="contained"
+              startIcon={<AddIcon />}
+            >
+              Add participant
+            </Button>
+          )}
         </Stack>
 
         {group.participants.length === 0 ? (
@@ -204,13 +293,15 @@ export function GroupDetailPage() {
                       >
                         <EditIcon />
                       </IconButton>
-                      <IconButton
-                        onClick={() => setParticipantToRemove(participant)}
-                        aria-label={`Delete ${participant.name}`}
-                        edge="end"
-                      >
-                        <DeleteIcon />
-                      </IconButton>
+                      {group.locked ? null : (
+                        <IconButton
+                          onClick={() => setParticipantToRemove(participant)}
+                          aria-label={`Delete ${participant.name}`}
+                          edge="end"
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      )}
                     </Stack>
                   }
                   sx={{ pr: { xs: 18, sm: 22 } }}
@@ -252,6 +343,57 @@ export function GroupDetailPage() {
         onClose={() => {
           setConfirmingDelete(false)
           deleteGroup.reset()
+        }}
+      />
+      <ConfirmDialog
+        open={confirmingLock}
+        title={`Lock ${group.name}?`}
+        description="Once locked, nobody can add or remove participants. You can still generate matches afterward, or unlock later if you need to change the list."
+        confirmLabel="Lock"
+        pending={lockGroup.isPending}
+        error={lockGroup.error}
+        onConfirm={() =>
+          lockGroup.mutate(undefined, {
+            onSuccess: () => setConfirmingLock(false),
+          })
+        }
+        onClose={() => {
+          setConfirmingLock(false)
+          lockGroup.reset()
+        }}
+      />
+      <ConfirmDialog
+        open={confirmingUnlock}
+        title={`Unlock ${group.name}?`}
+        description="This clears any matches and lets you add or remove participants again."
+        confirmLabel="Unlock"
+        pending={unlockGroup.isPending}
+        error={unlockGroup.error}
+        onConfirm={() =>
+          unlockGroup.mutate(undefined, {
+            onSuccess: () => setConfirmingUnlock(false),
+          })
+        }
+        onClose={() => {
+          setConfirmingUnlock(false)
+          unlockGroup.reset()
+        }}
+      />
+      <ConfirmDialog
+        open={confirmingDraw}
+        title={group.matches.length > 0 ? 'Redraw matches?' : 'Generate matches?'}
+        description="Everyone gets one person to buy for. Exclusions are respected. Existing matches will be replaced. If no valid matching exists, the group is unlocked so you can fix the list."
+        confirmLabel={group.matches.length > 0 ? 'Redraw' : 'Generate'}
+        pending={generateMatches.isPending}
+        error={generateMatches.error}
+        onConfirm={() =>
+          generateMatches.mutate(undefined, {
+            onSuccess: () => setConfirmingDraw(false),
+          })
+        }
+        onClose={() => {
+          setConfirmingDraw(false)
+          generateMatches.reset()
         }}
       />
       <ConfirmDialog

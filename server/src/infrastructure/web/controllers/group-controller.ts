@@ -1,13 +1,17 @@
 import { Request, Response, NextFunction } from 'express';
 
+import { presentGroup } from '#src/application/present-group';
 import Logger from '#src/application/ports/logger';
 import { AddParticipantUseCase } from '#src/application/use-cases/add-participant';
 import { CreateGroupUseCase } from '#src/application/use-cases/create-group';
 import { DeleteGroupUseCase } from '#src/application/use-cases/delete-group';
+import { GenerateMatchesUseCase } from '#src/application/use-cases/generate-matches';
 import { GetGroupUseCase } from '#src/application/use-cases/get-group';
 import { ListGroupsUseCase } from '#src/application/use-cases/list-groups';
+import { LockGroupUseCase } from '#src/application/use-cases/lock-group';
 import { RemoveParticipantUseCase } from '#src/application/use-cases/remove-participant';
 import { RenameGroupUseCase } from '#src/application/use-cases/rename-group';
+import { UnlockGroupUseCase } from '#src/application/use-cases/unlock-group';
 import { UpdateParticipantUseCase } from '#src/application/use-cases/update-participant';
 import { sendFailure } from '#src/infrastructure/web/status-for-failure';
 
@@ -21,6 +25,9 @@ type GroupControllerDeps = {
   addParticipant: AddParticipantUseCase;
   updateParticipant: UpdateParticipantUseCase;
   removeParticipant: RemoveParticipantUseCase;
+  lockGroup: LockGroupUseCase;
+  unlockGroup: UnlockGroupUseCase;
+  generateMatches: GenerateMatchesUseCase;
 };
 
 type GroupParams = { groupId: string };
@@ -34,6 +41,13 @@ const stringArrayOrUndefined = (value: unknown): string[] | undefined =>
     ? value.filter((item): item is string => typeof item === 'string')
     : undefined;
 
+const unauthenticated = {
+  failure: {
+    type: 'UNAUTHENTICATED',
+    reason: 'Sign in to continue',
+  },
+};
+
 const groupController = ({
   logger,
   createGroup,
@@ -44,16 +58,23 @@ const groupController = ({
   addParticipant,
   updateParticipant,
   removeParticipant,
+  lockGroup,
+  unlockGroup,
+  generateMatches,
 }: GroupControllerDeps) => {
+  const requireUserId = (req: Request, res: Response): string | null => {
+    const userId = req.user?.id;
+    if (!userId) {
+      res.status(401).send(unauthenticated);
+      return null;
+    }
+    return userId;
+  };
+
   const create = async (req: Request, res: Response, _next: NextFunction) => {
-    const ownerId = req.user?.id;
+    const ownerId = requireUserId(req, res);
     if (!ownerId) {
-      return res.status(401).send({
-        failure: {
-          type: 'UNAUTHENTICATED',
-          reason: 'Sign in to continue',
-        },
-      });
+      return;
     }
     const name = stringOrUndefined(req.body?.name) ?? '';
     const result = await createGroup.execute(name, ownerId);
@@ -63,12 +84,16 @@ const groupController = ({
     }
     const group = result.value;
     logger.info('group created', JSON.stringify(group));
-    return res.status(201).send(group);
+    return res.status(201).send(presentGroup(group, ownerId));
   };
 
-  const list = async (_req: Request, res: Response, _next: NextFunction) => {
+  const list = async (req: Request, res: Response, _next: NextFunction) => {
+    const userId = requireUserId(req, res);
+    if (!userId) {
+      return;
+    }
     const groups = await listGroups.execute();
-    return res.send(groups);
+    return res.send(groups.map((group) => presentGroup(group, userId)));
   };
 
   const find = async (
@@ -76,11 +101,15 @@ const groupController = ({
     res: Response,
     _next: NextFunction
   ) => {
+    const userId = requireUserId(req, res);
+    if (!userId) {
+      return;
+    }
     const result = await getGroup.execute(req.params.groupId);
     if (!result.ok) {
       return sendFailure(res, result.error);
     }
-    return res.send(result.value);
+    return res.send(presentGroup(result.value, userId));
   };
 
   const rename = async (
@@ -88,13 +117,17 @@ const groupController = ({
     res: Response,
     _next: NextFunction
   ) => {
+    const userId = requireUserId(req, res);
+    if (!userId) {
+      return;
+    }
     const name = stringOrUndefined(req.body?.name) ?? '';
     const result = await renameGroup.execute(req.params.groupId, name);
     if (!result.ok) {
       logger.info('failed to rename group', JSON.stringify(result.error));
       return sendFailure(res, result.error);
     }
-    return res.send(result.value);
+    return res.send(presentGroup(result.value, userId));
   };
 
   const remove = async (
@@ -117,6 +150,10 @@ const groupController = ({
     res: Response,
     _next: NextFunction
   ) => {
+    const userId = requireUserId(req, res);
+    if (!userId) {
+      return;
+    }
     const result = await addParticipant.execute(req.params.groupId, {
       name: stringOrUndefined(req.body?.name) ?? '',
       exclusions: stringArrayOrUndefined(req.body?.exclusions) ?? [],
@@ -125,7 +162,7 @@ const groupController = ({
       logger.info('failed to add participant', JSON.stringify(result.error));
       return sendFailure(res, result.error);
     }
-    return res.status(201).send(result.value);
+    return res.status(201).send(presentGroup(result.value, userId));
   };
 
   const updateMember = async (
@@ -133,6 +170,10 @@ const groupController = ({
     res: Response,
     _next: NextFunction
   ) => {
+    const userId = requireUserId(req, res);
+    if (!userId) {
+      return;
+    }
     const { groupId, participantId } = req.params;
     const result = await updateParticipant.execute(groupId, participantId, {
       name: stringOrUndefined(req.body?.name),
@@ -142,7 +183,7 @@ const groupController = ({
       logger.info('failed to update participant', JSON.stringify(result.error));
       return sendFailure(res, result.error);
     }
-    return res.send(result.value);
+    return res.send(presentGroup(result.value, userId));
   };
 
   const removeMember = async (
@@ -150,13 +191,68 @@ const groupController = ({
     res: Response,
     _next: NextFunction
   ) => {
+    const userId = requireUserId(req, res);
+    if (!userId) {
+      return;
+    }
     const { groupId, participantId } = req.params;
     const result = await removeParticipant.execute(groupId, participantId);
     if (!result.ok) {
       logger.info('failed to remove participant', JSON.stringify(result.error));
       return sendFailure(res, result.error);
     }
-    return res.send(result.value);
+    return res.send(presentGroup(result.value, userId));
+  };
+
+  const lock = async (
+    req: Request<GroupParams>,
+    res: Response,
+    _next: NextFunction
+  ) => {
+    const userId = requireUserId(req, res);
+    if (!userId) {
+      return;
+    }
+    const result = await lockGroup.execute(req.params.groupId, userId);
+    if (!result.ok) {
+      logger.info('failed to lock group', JSON.stringify(result.error));
+      return sendFailure(res, result.error);
+    }
+    return res.send(presentGroup(result.value, userId));
+  };
+
+  const unlock = async (
+    req: Request<GroupParams>,
+    res: Response,
+    _next: NextFunction
+  ) => {
+    const userId = requireUserId(req, res);
+    if (!userId) {
+      return;
+    }
+    const result = await unlockGroup.execute(req.params.groupId, userId);
+    if (!result.ok) {
+      logger.info('failed to unlock group', JSON.stringify(result.error));
+      return sendFailure(res, result.error);
+    }
+    return res.send(presentGroup(result.value, userId));
+  };
+
+  const draw = async (
+    req: Request<GroupParams>,
+    res: Response,
+    _next: NextFunction
+  ) => {
+    const userId = requireUserId(req, res);
+    if (!userId) {
+      return;
+    }
+    const result = await generateMatches.execute(req.params.groupId, userId);
+    if (!result.ok) {
+      logger.info('failed to generate matches', JSON.stringify(result.error));
+      return sendFailure(res, result.error);
+    }
+    return res.send(presentGroup(result.value, userId));
   };
 
   return {
@@ -168,6 +264,9 @@ const groupController = ({
     addMember,
     updateMember,
     removeMember,
+    lock,
+    unlock,
+    draw,
   };
 };
 

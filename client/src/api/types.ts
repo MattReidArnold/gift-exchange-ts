@@ -14,11 +14,18 @@ export interface GroupMember {
   role: GroupMemberRole
 }
 
+export interface Match {
+  giverId: string
+  receiverId: string
+}
+
 export interface Group {
   id: string
   name: string
   participants: Participant[]
   members: GroupMember[]
+  locked: boolean
+  matches: Match[]
 }
 
 export interface Failure {

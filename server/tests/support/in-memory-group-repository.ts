@@ -23,6 +23,8 @@ export default class InMemoryGroupRepository
       name: group.name,
       participants: group.participants,
       members: group.members,
+      locked: group.locked,
+      matches: group.matches,
     });
     this.groups.set(id, saved);
     return saved;

@@ -19,6 +19,7 @@ type AddParticipantResult = Result<
   Failure<
     | GroupUseCaseError
     | GiftExchangeGroupError.ParticipantNameEmpty
+    | GiftExchangeGroupError.GroupLocked
     | ParticipantValidationError
   >
 >;

@@ -13,6 +13,9 @@ const groupRouter = ({ logger, useCases }: WebContext) => {
   router.get('/:groupId', controller.find);
   router.put('/:groupId', controller.rename);
   router.delete('/:groupId', controller.remove);
+  router.post('/:groupId/lock', controller.lock);
+  router.delete('/:groupId/lock', controller.unlock);
+  router.post('/:groupId/matches', controller.draw);
   router.post('/:groupId/participants', controller.addMember);
   router.put('/:groupId/participants/:participantId', controller.updateMember);
   router.delete(

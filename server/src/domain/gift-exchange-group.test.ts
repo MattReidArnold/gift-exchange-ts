@@ -505,3 +505,119 @@ describe('participant account link', () => {
     expect(updated.findParticipant('bob')?.invite?.codeHash.value).toBe('hash-bob');
   });
 });
+
+describe('GiftExchangeGroup.lock', () => {
+  it('locks a group with at least two participants', () => {
+    const locked = expectOk(groupWithAliceAndBob().lock());
+
+    expect(locked.locked).toBe(true);
+  });
+
+  it('rejects locking when there are fewer than two participants', () => {
+    const failure = expectErr(emptyGroup().lock());
+
+    expect(failure.type).toBe(GiftExchangeGroupError.TooFewParticipants);
+  });
+
+  it('is idempotent when the group is already locked', () => {
+    const locked = expectOk(groupWithAliceAndBob().lock());
+
+    expect(expectOk(locked.lock())).toBe(locked);
+  });
+});
+
+describe('GiftExchangeGroup.unlock', () => {
+  it('clears the lock and any matches', () => {
+    const ready = expectOk(
+      expectOk(
+        groupWithAliceAndBob().updateParticipant('bob', { exclusions: [] })
+      ).lock()
+    );
+    const drawn = expectOk(ready.generateMatches((items) => [...items]));
+
+    const unlocked = drawn.unlock();
+
+    expect(unlocked.locked).toBe(false);
+    expect(unlocked.matches).toEqual([]);
+  });
+
+  it('is a no-op when already unlocked with no matches', () => {
+    const group = groupWithAliceAndBob();
+
+    expect(group.unlock()).toBe(group);
+  });
+});
+
+describe('GiftExchangeGroup roster changes while locked', () => {
+  it('rejects adding or removing participants', () => {
+    const locked = expectOk(groupWithAliceAndBob().lock());
+
+    expect(expectErr(locked.addParticipant({
+      id: 'carol',
+      name: participantName('Carol'),
+      exclusions: [],
+    })).type).toBe(GiftExchangeGroupError.GroupLocked);
+    expect(expectErr(locked.removeParticipant('alice')).type).toBe(
+      GiftExchangeGroupError.GroupLocked
+    );
+  });
+
+  it('clears matches when exclusions change', () => {
+    const ready = expectOk(
+      expectOk(
+        groupWithAliceAndBob().updateParticipant('bob', { exclusions: [] })
+      ).lock()
+    );
+    const drawn = expectOk(ready.generateMatches((items) => [...items]));
+
+    const updated = expectOk(
+      drawn.updateParticipant('bob', { exclusions: ['alice'] })
+    );
+
+    expect(updated.matches).toEqual([]);
+    expect(updated.locked).toBe(true);
+  });
+});
+
+describe('GiftExchangeGroup.generateMatches', () => {
+  const stableShuffle = <T,>(items: readonly T[]) => [...items];
+
+  it('rejects generating matches before the group is locked', () => {
+    const failure = expectErr(groupWithAliceAndBob().generateMatches(stableShuffle));
+
+    expect(failure.type).toBe(GiftExchangeGroupError.GroupNotLocked);
+  });
+
+  it('assigns every participant a distinct receiver while respecting exclusions', () => {
+    const withCarol = expectOk(
+      groupWithAliceAndBob().addParticipant({
+        id: 'carol',
+        name: participantName('Carol'),
+        exclusions: [],
+      })
+    );
+    const locked = expectOk(withCarol.lock());
+
+    const drawn = expectOk(locked.generateMatches(stableShuffle));
+
+    expect(drawn.matches).toHaveLength(3);
+    const givers = drawn.matches.map(({ giverId }) => giverId).sort();
+    const receivers = drawn.matches.map(({ receiverId }) => receiverId).sort();
+    expect(givers).toEqual(['alice', 'bob', 'carol']);
+    expect(receivers).toEqual(['alice', 'bob', 'carol']);
+    expect(drawn.matches.find(({ giverId }) => giverId === 'bob')?.receiverId).not.toBe(
+      'alice'
+    );
+  });
+
+  it('rejects impossible exclusions', () => {
+    const mutual = expectOk(
+      groupWithAliceAndBob().updateParticipant('alice', { exclusions: ['bob'] })
+    );
+    const locked = expectOk(mutual.lock());
+
+    const failure = expectErr(locked.generateMatches(stableShuffle));
+
+    expect(failure.type).toBe(GiftExchangeGroupError.MatchingImpossible);
+  });
+});

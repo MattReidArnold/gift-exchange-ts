@@ -22,6 +22,8 @@ describe('POST /api/groups', () => {
       name,
       participants: [],
       members: [{ userId: api.userId, role: 'owner' }],
+      locked: false,
+      matches: [],
     });
   });
 

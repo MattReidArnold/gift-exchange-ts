@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 
+import { presentGroup } from '#src/application/present-group';
 import Logger from '#src/application/ports/logger';
 import { ClaimInviteUseCase } from '#src/application/use-cases/claim-invite';
 import { IssueParticipantInviteUseCase } from '#src/application/use-cases/issue-participant-invite';
@@ -47,7 +48,10 @@ const inviteController = ({
       logger.info('failed to issue invite', JSON.stringify(result.error));
       return sendFailure(res, result.error);
     }
-    return res.status(200).send({ group: result.value.group, token: result.value.token });
+    return res.status(200).send({
+      group: presentGroup(result.value.group, userId),
+      token: result.value.token,
+    });
   };
 
   const revoke = async (
@@ -69,7 +73,7 @@ const inviteController = ({
       logger.info('failed to revoke invite', JSON.stringify(result.error));
       return sendFailure(res, result.error);
     }
-    return res.send(result.value);
+    return res.send(presentGroup(result.value, userId));
   };
 
   const preview = async (
