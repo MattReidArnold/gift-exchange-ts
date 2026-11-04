@@ -17,7 +17,6 @@ type GenerateMatchesResult = Result<
     | GroupUseCaseError.GroupNotFound
     | GroupUseCaseError.GroupSaveFailed
     | GroupUseCaseError.NotOwner
-    | GiftExchangeGroupError.GroupNotLocked
     | GiftExchangeGroupError.TooFewParticipants
     | GiftExchangeGroupError.MatchingImpossible
   >

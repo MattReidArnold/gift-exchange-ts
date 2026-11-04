@@ -195,26 +195,11 @@ export const createFakeApi = (
       return groupNotFound()
     }
 
-    if (pathname.endsWith('/lock')) {
-      if (method === 'POST') {
-        if (group.participants.length < 2) {
-          return failure(
-            422,
-            'TOO_FEW_PARTICIPANTS',
-            'At least two participants are required',
-          )
-        }
-        return replaceGroup({ ...group, locked: true })
-      }
-      if (method === 'DELETE') {
-        return replaceGroup({ ...group, locked: false, matches: [] })
-      }
+    if (pathname.endsWith('/lock') && method === 'DELETE') {
+      return replaceGroup({ ...group, locked: false, matches: [] })
     }
 
     if (pathname.endsWith('/matches') && method === 'POST') {
-      if (!group.locked) {
-        return failure(422, 'GROUP_NOT_LOCKED', 'Lock the group before generating matches')
-      }
       if (group.participants.length < 2) {
         return failure(
           422,
@@ -239,7 +224,7 @@ export const createFakeApi = (
           'No valid matching exists for the current exclusions',
         )
       }
-      return replaceGroup({ ...group, matches })
+      return replaceGroup({ ...group, locked: true, matches })
     }
 
     if (!pathname.includes('/participants')) {

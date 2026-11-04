@@ -8,7 +8,6 @@ import generateMatches from '#src/application/use-cases/generate-matches';
 import getGroup from '#src/application/use-cases/get-group';
 import issueParticipantInvite from '#src/application/use-cases/issue-participant-invite';
 import listGroups from '#src/application/use-cases/list-groups';
-import lockGroup from '#src/application/use-cases/lock-group';
 import previewInvite from '#src/application/use-cases/preview-invite';
 import removeParticipant from '#src/application/use-cases/remove-participant';
 import renameGroup from '#src/application/use-cases/rename-group';
@@ -33,7 +32,6 @@ export default ({
   revokeParticipantInvite: revokeParticipantInvite({ groupRepository }),
   previewInvite: previewInvite({ groupRepository }),
   claimInvite: claimInvite({ groupRepository }),
-  lockGroup: lockGroup({ groupRepository }),
   unlockGroup: unlockGroup({ groupRepository }),
   generateMatches: generateMatches({ groupRepository }),
 });

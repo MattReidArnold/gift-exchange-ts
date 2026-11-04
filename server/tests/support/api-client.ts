@@ -187,8 +187,6 @@ export const createApiClient = ({
         'DELETE',
         `/api/groups/${groupId}/participants/${participantId}`
       ),
-    lockGroup: (groupId: string) =>
-      request<GroupJson>('POST', `/api/groups/${groupId}/lock`),
     unlockGroup: (groupId: string) =>
       request<GroupJson>('DELETE', `/api/groups/${groupId}/lock`),
     generateMatches: (groupId: string) =>

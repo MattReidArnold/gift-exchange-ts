@@ -10,7 +10,6 @@ export enum GiftExchangeGroupError {
   UserAlreadyLinked = 'USER_ALREADY_LINKED',
   InviteNotPending = 'INVITE_NOT_PENDING',
   GroupLocked = 'GROUP_LOCKED',
-  GroupNotLocked = 'GROUP_NOT_LOCKED',
   TooFewParticipants = 'TOO_FEW_PARTICIPANTS',
   MatchingImpossible = 'MATCHING_IMPOSSIBLE',
 }
@@ -72,12 +71,6 @@ export const groupLockedFailure =
   (): Failure<GiftExchangeGroupError.GroupLocked> => ({
     type: GiftExchangeGroupError.GroupLocked,
     reason: 'This group is locked, so the participant list cannot change',
-  });
-
-export const groupNotLockedFailure =
-  (): Failure<GiftExchangeGroupError.GroupNotLocked> => ({
-    type: GiftExchangeGroupError.GroupNotLocked,
-    reason: 'Lock the group before generating matches',
   });
 
 export const tooFewParticipantsFailure =

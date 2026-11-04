@@ -33,7 +33,6 @@ import {
   useDeleteGroup,
   useGenerateMatches,
   useIssueInvite,
-  useLockGroup,
   useRemoveParticipant,
   useRenameGroup,
   useRevokeInvite,
@@ -93,11 +92,9 @@ export function GroupDetailPage() {
   const navigate = useNavigate()
   const deleteGroup = useDeleteGroup()
   const removeParticipant = useRemoveParticipant(group.id)
-  const lockGroup = useLockGroup(group.id)
   const unlockGroup = useUnlockGroup(group.id)
   const generateMatches = useGenerateMatches(group.id)
   const [confirmingDelete, setConfirmingDelete] = useState(false)
-  const [confirmingLock, setConfirmingLock] = useState(false)
   const [confirmingUnlock, setConfirmingUnlock] = useState(false)
   const [confirmingDraw, setConfirmingDraw] = useState(false)
   const [participantToRemove, setParticipantToRemove] = useState<Participant | null>(null)
@@ -165,33 +162,23 @@ export function GroupDetailPage() {
           {group.name}
         </Typography>
         <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
-          {isOwner && !group.locked ? (
+          {isOwner && group.participants.length >= 2 ? (
             <Button
-              onClick={() => setConfirmingLock(true)}
-              variant="outlined"
-              startIcon={<LockIcon />}
-              disabled={group.participants.length < 2}
+              onClick={() => setConfirmingDraw(true)}
+              variant="contained"
+              startIcon={<CasinoIcon />}
             >
-              Lock group
+              {group.matches.length > 0 ? 'Redraw matches' : 'Generate matches'}
             </Button>
           ) : null}
           {isOwner && group.locked ? (
-            <>
-              <Button
-                onClick={() => setConfirmingDraw(true)}
-                variant="contained"
-                startIcon={<CasinoIcon />}
-              >
-                {group.matches.length > 0 ? 'Redraw matches' : 'Generate matches'}
-              </Button>
-              <Button
-                onClick={() => setConfirmingUnlock(true)}
-                variant="outlined"
-                startIcon={<LockOpenIcon />}
-              >
-                Unlock group
-              </Button>
-            </>
+            <Button
+              onClick={() => setConfirmingUnlock(true)}
+              variant="outlined"
+              startIcon={<LockOpenIcon />}
+            >
+              Unlock group
+            </Button>
           ) : null}
           <Button
             component={RouterLink}
@@ -224,9 +211,8 @@ export function GroupDetailPage() {
         </Typography>
         {group.matches.length === 0 ? (
           <Typography color="text.secondary">
-            {group.locked
-              ? 'No matches yet. Generate a draw when you are ready.'
-              : 'Lock the group when the participant list is final, then generate matches.'}
+            Generate matches when the participant list is final. That locks the group so nobody
+            can be added or removed.
           </Typography>
         ) : (
           <Paper variant="outlined">
@@ -239,9 +225,9 @@ export function GroupDetailPage() {
             </List>
           </Paper>
         )}
-        {lockGroup.error || unlockGroup.error || generateMatches.error ? (
+        {unlockGroup.error || generateMatches.error ? (
           <Alert severity="error">
-            {(lockGroup.error ?? unlockGroup.error ?? generateMatches.error)?.message}
+            {(unlockGroup.error ?? generateMatches.error)?.message}
           </Alert>
         ) : null}
       </Stack>
@@ -346,23 +332,6 @@ export function GroupDetailPage() {
         }}
       />
       <ConfirmDialog
-        open={confirmingLock}
-        title={`Lock ${group.name}?`}
-        description="Once locked, nobody can add or remove participants. You can still generate matches afterward, or unlock later if you need to change the list."
-        confirmLabel="Lock"
-        pending={lockGroup.isPending}
-        error={lockGroup.error}
-        onConfirm={() =>
-          lockGroup.mutate(undefined, {
-            onSuccess: () => setConfirmingLock(false),
-          })
-        }
-        onClose={() => {
-          setConfirmingLock(false)
-          lockGroup.reset()
-        }}
-      />
-      <ConfirmDialog
         open={confirmingUnlock}
         title={`Unlock ${group.name}?`}
         description="This clears any matches and lets you add or remove participants again."
@@ -382,7 +351,7 @@ export function GroupDetailPage() {
       <ConfirmDialog
         open={confirmingDraw}
         title={group.matches.length > 0 ? 'Redraw matches?' : 'Generate matches?'}
-        description="Everyone gets one person to buy for. Exclusions are respected. Existing matches will be replaced. If no valid matching exists, the group is unlocked so you can fix the list."
+        description="Everyone gets one person to buy for. Exclusions are respected. A successful draw locks the group. If no valid matching exists, the group stays unlocked so you can fix the list."
         confirmLabel={group.matches.length > 0 ? 'Redraw' : 'Generate'}
         pending={generateMatches.isPending}
         error={generateMatches.error}

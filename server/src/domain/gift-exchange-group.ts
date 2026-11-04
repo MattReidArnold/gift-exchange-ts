@@ -10,7 +10,6 @@ import {
   GiftExchangeGroupError,
   ParticipantValidationError,
   groupLockedFailure,
-  groupNotLockedFailure,
   invalidExclusionFailure,
   matchingImpossibleFailure,
   participantAlreadyLinkedFailure,
@@ -89,15 +88,9 @@ type ClaimInviteResult = Result<
   >
 >;
 
-type LockResult = Result<
-  GiftExchangeGroup,
-  Failure<GiftExchangeGroupError.TooFewParticipants>
->;
-
 type GenerateMatchesResult = Result<
   GiftExchangeGroup,
   Failure<
-    | GiftExchangeGroupError.GroupNotLocked
     | GiftExchangeGroupError.TooFewParticipants
     | GiftExchangeGroupError.MatchingImpossible
   >
@@ -160,16 +153,6 @@ export default class GiftExchangeGroup {
     );
   }
 
-  lock(): LockResult {
-    if (this.participants.length < 2) {
-      return err(tooFewParticipantsFailure());
-    }
-    if (this.locked) {
-      return ok(this);
-    }
-    return ok(this.copy({ locked: true }));
-  }
-
   unlock(): GiftExchangeGroup {
     if (!this.locked && this.matches.length === 0) {
       return this;
@@ -177,10 +160,8 @@ export default class GiftExchangeGroup {
     return this.copy({ locked: false, matches: [] });
   }
 
+  // Locks the roster and assigns matches. Callers unlock on MatchingImpossible.
   generateMatches(shuffle: Shuffle = defaultShuffle): GenerateMatchesResult {
-    if (!this.locked) {
-      return err(groupNotLockedFailure());
-    }
     if (this.participants.length < 2) {
       return err(tooFewParticipantsFailure());
     }
@@ -198,7 +179,7 @@ export default class GiftExchangeGroup {
     if (!matches) {
       return err(matchingImpossibleFailure());
     }
-    return ok(this.copy({ matches }));
+    return ok(this.copy({ locked: true, matches }));
   }
 
   addParticipant({ id, name, exclusions }: NewParticipant): AddParticipantResult {

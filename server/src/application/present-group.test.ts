@@ -34,7 +34,6 @@ const groupWithMatches = () => {
       exclusions: [],
     })
   );
-  group = expectOk(group.lock());
   group = expectOk(group.generateMatches((items) => [...items]));
   return new GiftExchangeGroup({
     id: 'group-1',

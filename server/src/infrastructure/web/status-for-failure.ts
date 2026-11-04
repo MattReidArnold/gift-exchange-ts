@@ -26,7 +26,6 @@ export const statusForFailure = ({ type }: GroupFailure): number => {
     case GiftExchangeGroupError.ParticipantNameEmpty:
     case GiftExchangeGroupError.ParticipantNameTaken:
     case GiftExchangeGroupError.InvalidExclusion:
-    case GiftExchangeGroupError.GroupNotLocked:
     case GiftExchangeGroupError.TooFewParticipants:
     case GiftExchangeGroupError.MatchingImpossible:
       return 422;

@@ -8,7 +8,6 @@ import { DeleteGroupUseCase } from '#src/application/use-cases/delete-group';
 import { GenerateMatchesUseCase } from '#src/application/use-cases/generate-matches';
 import { GetGroupUseCase } from '#src/application/use-cases/get-group';
 import { ListGroupsUseCase } from '#src/application/use-cases/list-groups';
-import { LockGroupUseCase } from '#src/application/use-cases/lock-group';
 import { RemoveParticipantUseCase } from '#src/application/use-cases/remove-participant';
 import { RenameGroupUseCase } from '#src/application/use-cases/rename-group';
 import { UnlockGroupUseCase } from '#src/application/use-cases/unlock-group';
@@ -25,7 +24,6 @@ type GroupControllerDeps = {
   addParticipant: AddParticipantUseCase;
   updateParticipant: UpdateParticipantUseCase;
   removeParticipant: RemoveParticipantUseCase;
-  lockGroup: LockGroupUseCase;
   unlockGroup: UnlockGroupUseCase;
   generateMatches: GenerateMatchesUseCase;
 };
@@ -58,7 +56,6 @@ const groupController = ({
   addParticipant,
   updateParticipant,
   removeParticipant,
-  lockGroup,
   unlockGroup,
   generateMatches,
 }: GroupControllerDeps) => {
@@ -204,23 +201,6 @@ const groupController = ({
     return res.send(presentGroup(result.value, userId));
   };
 
-  const lock = async (
-    req: Request<GroupParams>,
-    res: Response,
-    _next: NextFunction
-  ) => {
-    const userId = requireUserId(req, res);
-    if (!userId) {
-      return;
-    }
-    const result = await lockGroup.execute(req.params.groupId, userId);
-    if (!result.ok) {
-      logger.info('failed to lock group', JSON.stringify(result.error));
-      return sendFailure(res, result.error);
-    }
-    return res.send(presentGroup(result.value, userId));
-  };
-
   const unlock = async (
     req: Request<GroupParams>,
     res: Response,
@@ -264,7 +244,6 @@ const groupController = ({
     addMember,
     updateMember,
     removeMember,
-    lock,
     unlock,
     draw,
   };

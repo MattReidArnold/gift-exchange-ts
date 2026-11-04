@@ -227,7 +227,7 @@ describe('participants', () => {
 })
 
 describe('locking and matching', () => {
-  it('locks the group and generates matches for the owner', async () => {
+  it('generates matches, locks the group, and can unlock again', async () => {
     const open: Group = {
       ...family,
       participants: [
@@ -243,22 +243,17 @@ describe('locking and matching', () => {
     }
     const { api, user } = renderApp('/groups/family', { groups: [open] })
 
-    await user.click(await screen.findByRole('button', { name: 'Lock group' }))
-    const lockDialog = await screen.findByRole('dialog', { name: 'Lock Family?' })
-    await user.click(within(lockDialog).getByRole('button', { name: 'Lock' }))
-
-    expect(await screen.findByText(/This group is locked/)).toBeInTheDocument()
-    expect(api.groups[0].locked).toBe(true)
-    expect(screen.queryByRole('link', { name: 'Add participant' })).not.toBeInTheDocument()
-
     await user.click(await screen.findByRole('button', { name: 'Generate matches' }))
     const drawDialog = await screen.findByRole('dialog', { name: 'Generate matches?' })
     await user.click(within(drawDialog).getByRole('button', { name: 'Generate' }))
 
+    expect(await screen.findByText(/This group is locked/)).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Add participant' })).not.toBeInTheDocument()
     const matches = await screen.findByRole('list', { name: 'Matches' })
     expect(within(matches).getByText('Alice → Bob')).toBeInTheDocument()
     expect(within(matches).getByText('Bob → Carol')).toBeInTheDocument()
     expect(within(matches).getByText('Carol → Alice')).toBeInTheDocument()
+    expect(api.groups[0].locked).toBe(true)
     expect(api.groups[0].matches).toHaveLength(3)
 
     await user.click(await screen.findByRole('button', { name: 'Unlock group' }))

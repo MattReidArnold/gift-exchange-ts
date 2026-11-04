@@ -506,32 +506,10 @@ describe('participant account link', () => {
   });
 });
 
-describe('GiftExchangeGroup.lock', () => {
-  it('locks a group with at least two participants', () => {
-    const locked = expectOk(groupWithAliceAndBob().lock());
-
-    expect(locked.locked).toBe(true);
-  });
-
-  it('rejects locking when there are fewer than two participants', () => {
-    const failure = expectErr(emptyGroup().lock());
-
-    expect(failure.type).toBe(GiftExchangeGroupError.TooFewParticipants);
-  });
-
-  it('is idempotent when the group is already locked', () => {
-    const locked = expectOk(groupWithAliceAndBob().lock());
-
-    expect(expectOk(locked.lock())).toBe(locked);
-  });
-});
-
 describe('GiftExchangeGroup.unlock', () => {
   it('clears the lock and any matches', () => {
     const ready = expectOk(
-      expectOk(
-        groupWithAliceAndBob().updateParticipant('bob', { exclusions: [] })
-      ).lock()
+      groupWithAliceAndBob().updateParticipant('bob', { exclusions: [] })
     );
     const drawn = expectOk(ready.generateMatches((items) => [...items]));
 
@@ -550,7 +528,11 @@ describe('GiftExchangeGroup.unlock', () => {
 
 describe('GiftExchangeGroup roster changes while locked', () => {
   it('rejects adding or removing participants', () => {
-    const locked = expectOk(groupWithAliceAndBob().lock());
+    const locked = expectOk(
+      expectOk(
+        groupWithAliceAndBob().updateParticipant('bob', { exclusions: [] })
+      ).generateMatches((items) => [...items])
+    );
 
     expect(expectErr(locked.addParticipant({
       id: 'carol',
@@ -563,12 +545,11 @@ describe('GiftExchangeGroup roster changes while locked', () => {
   });
 
   it('clears matches when exclusions change', () => {
-    const ready = expectOk(
+    const drawn = expectOk(
       expectOk(
         groupWithAliceAndBob().updateParticipant('bob', { exclusions: [] })
-      ).lock()
+      ).generateMatches((items) => [...items])
     );
-    const drawn = expectOk(ready.generateMatches((items) => [...items]));
 
     const updated = expectOk(
       drawn.updateParticipant('bob', { exclusions: ['alice'] })
@@ -582,13 +563,7 @@ describe('GiftExchangeGroup roster changes while locked', () => {
 describe('GiftExchangeGroup.generateMatches', () => {
   const stableShuffle = <T,>(items: readonly T[]) => [...items];
 
-  it('rejects generating matches before the group is locked', () => {
-    const failure = expectErr(groupWithAliceAndBob().generateMatches(stableShuffle));
-
-    expect(failure.type).toBe(GiftExchangeGroupError.GroupNotLocked);
-  });
-
-  it('assigns every participant a distinct receiver while respecting exclusions', () => {
+  it('locks the group and assigns every participant a distinct receiver', () => {
     const withCarol = expectOk(
       groupWithAliceAndBob().addParticipant({
         id: 'carol',
@@ -596,10 +571,10 @@ describe('GiftExchangeGroup.generateMatches', () => {
         exclusions: [],
       })
     );
-    const locked = expectOk(withCarol.lock());
 
-    const drawn = expectOk(locked.generateMatches(stableShuffle));
+    const drawn = expectOk(withCarol.generateMatches(stableShuffle));
 
+    expect(drawn.locked).toBe(true);
     expect(drawn.matches).toHaveLength(3);
     const givers = drawn.matches.map(({ giverId }) => giverId).sort();
     const receivers = drawn.matches.map(({ receiverId }) => receiverId).sort();
@@ -610,14 +585,20 @@ describe('GiftExchangeGroup.generateMatches', () => {
     );
   });
 
-  it('rejects impossible exclusions', () => {
+  it('rejects fewer than two participants', () => {
+    const failure = expectErr(emptyGroup().generateMatches(stableShuffle));
+
+    expect(failure.type).toBe(GiftExchangeGroupError.TooFewParticipants);
+  });
+
+  it('rejects impossible exclusions without locking', () => {
     const mutual = expectOk(
       groupWithAliceAndBob().updateParticipant('alice', { exclusions: ['bob'] })
     );
-    const locked = expectOk(mutual.lock());
 
-    const failure = expectErr(locked.generateMatches(stableShuffle));
+    const failure = expectErr(mutual.generateMatches(stableShuffle));
 
     expect(failure.type).toBe(GiftExchangeGroupError.MatchingImpossible);
+    expect(mutual.locked).toBe(false);
   });
 });

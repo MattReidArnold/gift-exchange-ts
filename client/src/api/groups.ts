@@ -129,11 +129,6 @@ export const useRevokeInvite = (groupId: string) =>
     }),
   )
 
-export const useLockGroup = (groupId: string) =>
-  useGroupMutation(() =>
-    apiFetch<Group>(`${groupPath(groupId)}/lock`, { method: 'POST' }),
-  )
-
 export const useUnlockGroup = (groupId: string) =>
   useGroupMutation(() =>
     apiFetch<Group>(`${groupPath(groupId)}/lock`, { method: 'DELETE' }),
@@ -145,7 +140,7 @@ export const useGenerateMatches = (groupId: string) => {
     mutationFn: () =>
       apiFetch<Group>(`${groupPath(groupId)}/matches`, { method: 'POST' }),
     onSuccess: (group) => cacheGroup(queryClient, group),
-    // A failed draw may unlock the group server-side when matching is impossible.
+    // A failed draw unlocks the group when matching is impossible.
     onError: () =>
       queryClient.invalidateQueries({ queryKey: groupKeys.detail(groupId) }),
   })

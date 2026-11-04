@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
 import generateMatches from '#src/application/use-cases/generate-matches';
-import lockGroup from '#src/application/use-cases/lock-group';
 import unlockGroup from '#src/application/use-cases/unlock-group';
 import { GroupUseCaseError } from '#src/application/use-cases/group-failures';
 import InMemoryGroupRepository from '#tests/support/in-memory-group-repository';
@@ -16,7 +15,6 @@ describe('unlockGroup', () => {
       { id: 'bob', name: 'Bob' },
       { id: 'carol', name: 'Carol' },
     ]);
-    expectOk(await lockGroup({ groupRepository }).execute(group.id!, 'owner-1'));
     expectOk(
       await generateMatches({ groupRepository }).execute(group.id!, 'owner-1')
     );
@@ -35,7 +33,9 @@ describe('unlockGroup', () => {
       { id: 'alice', name: 'Alice' },
       { id: 'bob', name: 'Bob' },
     ]);
-    expectOk(await lockGroup({ groupRepository }).execute(group.id!, 'owner-1'));
+    expectOk(
+      await generateMatches({ groupRepository }).execute(group.id!, 'owner-1')
+    );
 
     const failure = expectErr(
       await unlockGroup({ groupRepository }).execute(group.id!, 'someone-else')

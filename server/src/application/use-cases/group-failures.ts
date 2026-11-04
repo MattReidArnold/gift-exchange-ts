@@ -27,7 +27,7 @@ export const notAMemberFailure = (): Failure<GroupUseCaseError.NotAMember> => ({
 
 export const notOwnerFailure = (): Failure<GroupUseCaseError.NotOwner> => ({
   type: GroupUseCaseError.NotOwner,
-  reason: 'Only the group owner can lock the group or generate matches',
+  reason: 'Only the group owner can generate matches or unlock the group',
 });
 
 export const inviteNotFoundFailure =
