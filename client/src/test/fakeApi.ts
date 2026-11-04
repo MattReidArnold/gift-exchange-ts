@@ -183,6 +183,8 @@ export const createFakeApi = (
         name,
         participants: [],
         members: [ownerMember],
+        locked: false,
+        matches: [],
       }
       groups = [...groups, group]
       return json(201, group)
@@ -191,6 +193,38 @@ export const createFakeApi = (
     const group = groups.find(({ id }) => id === decodeURIComponent(groupId))
     if (!group) {
       return groupNotFound()
+    }
+
+    if (pathname.endsWith('/lock') && method === 'DELETE') {
+      return replaceGroup({ ...group, locked: false, matches: [] })
+    }
+
+    if (pathname.endsWith('/matches') && method === 'POST') {
+      if (group.participants.length < 2) {
+        return failure(
+          422,
+          'TOO_FEW_PARTICIPANTS',
+          'At least two participants are required',
+        )
+      }
+      const ids = group.participants.map(({ id }) => id)
+      const matches = ids.map((giverId, index) => ({
+        giverId,
+        receiverId: ids[(index + 1) % ids.length]!,
+      }))
+      const invalid = matches.some(({ giverId, receiverId }) => {
+        const giver = group.participants.find(({ id }) => id === giverId)
+        return giver?.exclusions.includes(receiverId)
+      })
+      if (invalid) {
+        saveGroup({ ...group, locked: false, matches: [] })
+        return failure(
+          422,
+          'MATCHING_IMPOSSIBLE',
+          'No valid matching exists for the current exclusions',
+        )
+      }
+      return replaceGroup({ ...group, locked: true, matches })
     }
 
     if (!pathname.includes('/participants')) {
@@ -209,6 +243,13 @@ export const createFakeApi = (
     }
 
     if (!participantId) {
+      if (group.locked) {
+        return failure(
+          409,
+          'GROUP_LOCKED',
+          'This group is locked, so the participant list cannot change',
+        )
+      }
       const name = String(body.name ?? '').trim()
       const invalid = participantNameInvalid(group, name)
       if (invalid) {
@@ -278,6 +319,13 @@ export const createFakeApi = (
     }
 
     if (method === 'DELETE') {
+      if (group.locked) {
+        return failure(
+          409,
+          'GROUP_LOCKED',
+          'This group is locked, so the participant list cannot change',
+        )
+      }
       return replaceGroup({
         ...group,
         participants: group.participants

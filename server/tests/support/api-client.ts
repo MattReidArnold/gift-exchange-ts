@@ -15,11 +15,18 @@ export type MemberJson = {
   role: 'owner' | 'member';
 };
 
+export type MatchJson = {
+  giverId: string;
+  receiverId: string;
+};
+
 export type GroupJson = {
   id: string;
   name: string;
   participants: ParticipantJson[];
   members: MemberJson[];
+  locked: boolean;
+  matches: MatchJson[];
 };
 
 export type IssuedInviteJson = {
@@ -180,6 +187,10 @@ export const createApiClient = ({
         'DELETE',
         `/api/groups/${groupId}/participants/${participantId}`
       ),
+    unlockGroup: (groupId: string) =>
+      request<GroupJson>('DELETE', `/api/groups/${groupId}/lock`),
+    generateMatches: (groupId: string) =>
+      request<GroupJson>('POST', `/api/groups/${groupId}/matches`),
     issueInvite: (groupId: string, participantId: string) =>
       request<IssuedInviteJson>(
         'POST',

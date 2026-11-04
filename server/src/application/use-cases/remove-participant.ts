@@ -11,7 +11,11 @@ import {
 
 type RemoveParticipantResult = Result<
   GiftExchangeGroup,
-  Failure<GroupUseCaseError | GiftExchangeGroupError.ParticipantNotFound>
+  Failure<
+    | GroupUseCaseError
+    | GiftExchangeGroupError.ParticipantNotFound
+    | GiftExchangeGroupError.GroupLocked
+  >
 >;
 
 type RemoveParticipantDeps = {

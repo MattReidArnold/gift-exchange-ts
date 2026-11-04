@@ -9,6 +9,8 @@ const family: Group = {
   id: 'family',
   name: 'Family',
   members: [ownerMember],
+  locked: false,
+  matches: [],
   participants: [
     { id: 'alice', name: 'Alice', exclusions: [], userId: null, invitePending: false },
     { id: 'bob', name: 'Bob', exclusions: ['alice'], userId: null, invitePending: false },
@@ -221,6 +223,50 @@ describe('participants', () => {
     const list = screen.getByRole('list', { name: 'Participants' })
     expect(within(list).queryByText('Alice')).not.toBeInTheDocument()
     expect(within(list).getByText('No exclusions')).toBeInTheDocument()
+  })
+})
+
+describe('locking and matching', () => {
+  it('generates matches, locks the group, and can unlock again', async () => {
+    const open: Group = {
+      ...family,
+      participants: [
+        ...family.participants,
+        {
+          id: 'carol',
+          name: 'Carol',
+          exclusions: [],
+          userId: null,
+          invitePending: false,
+        },
+      ],
+    }
+    const { api, user } = renderApp('/groups/family', { groups: [open] })
+
+    await user.click(await screen.findByRole('button', { name: 'Generate matches' }))
+    const drawDialog = await screen.findByRole('dialog', { name: 'Generate matches?' })
+    await user.click(within(drawDialog).getByRole('button', { name: 'Generate' }))
+
+    expect(await screen.findByText(/This group is locked/)).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Add participant' })).not.toBeInTheDocument()
+    const matches = await screen.findByRole('list', { name: 'Matches' })
+    expect(within(matches).getByText('Alice → Bob')).toBeInTheDocument()
+    expect(within(matches).getByText('Bob → Carol')).toBeInTheDocument()
+    expect(within(matches).getByText('Carol → Alice')).toBeInTheDocument()
+    expect(api.groups[0].locked).toBe(true)
+    expect(api.groups[0].matches).toHaveLength(3)
+
+    await user.click(await screen.findByRole('button', { name: 'Unlock group' }))
+    const unlockDialog = await screen.findByRole('dialog', { name: 'Unlock Family?' })
+    await user.click(within(unlockDialog).getByRole('button', { name: 'Unlock' }))
+
+    await waitFor(() =>
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
+    )
+    expect(screen.queryByText(/This group is locked/)).not.toBeInTheDocument()
+    expect(api.groups[0].locked).toBe(false)
+    expect(api.groups[0].matches).toEqual([])
+    expect(screen.getByRole('link', { name: 'Add participant' })).toBeInTheDocument()
   })
 })
 

@@ -4,6 +4,7 @@ export enum GroupUseCaseError {
   GroupNotFound = 'GROUP_NOT_FOUND',
   GroupSaveFailed = 'GROUP_SAVE_FAILED',
   NotAMember = 'NOT_A_MEMBER',
+  NotOwner = 'NOT_OWNER',
   InviteNotFound = 'INVITE_NOT_FOUND',
 }
 
@@ -22,6 +23,11 @@ export const groupSaveFailedFailure =
 export const notAMemberFailure = (): Failure<GroupUseCaseError.NotAMember> => ({
   type: GroupUseCaseError.NotAMember,
   reason: 'Only a member of the group can manage invites',
+});
+
+export const notOwnerFailure = (): Failure<GroupUseCaseError.NotOwner> => ({
+  type: GroupUseCaseError.NotOwner,
+  reason: 'Only the group owner can generate matches or unlock the group',
 });
 
 export const inviteNotFoundFailure =

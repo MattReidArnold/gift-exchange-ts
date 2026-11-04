@@ -23,10 +23,17 @@ interface MemberAttrs {
   role: GroupMemberRole;
 }
 
+interface MatchAttrs {
+  giverId: string;
+  receiverId: string;
+}
+
 interface GiftExchangeGroupDocument extends mongoose.Document {
   name: string;
   participants: ParticipantAttrs[];
   members: MemberAttrs[];
+  locked: boolean;
+  matches: MatchAttrs[];
   toEntity(): GiftExchangeGroup;
 }
 
@@ -50,10 +57,20 @@ const MemberSchema = new mongoose.Schema(
   { _id: false }
 );
 
+const MatchSchema = new mongoose.Schema(
+  {
+    giverId: { type: String, required: true },
+    receiverId: { type: String, required: true },
+  },
+  { _id: false }
+);
+
 const GiftExchangeGroupSchema = new mongoose.Schema({
   name: { type: String, required: true },
   participants: { type: [ParticipantSchema], default: [] },
   members: { type: [MemberSchema], required: true },
+  locked: { type: Boolean, default: false },
+  matches: { type: [MatchSchema], default: [] },
 });
 
 GiftExchangeGroupSchema.index({ 'members.userId': 1 });
@@ -65,7 +82,7 @@ const toMember = ({ userId, role }: MemberAttrs): GroupMember => ({
 });
 
 GiftExchangeGroupSchema.methods.toEntity = function (): GiftExchangeGroup {
-  const { _id, name, participants, members } = this as GiftExchangeGroupDocument;
+  const { _id, name, participants, members, locked, matches } = this as GiftExchangeGroupDocument;
   return new GiftExchangeGroup({
     id: String(_id),
     name: GroupName.hydrate(name),
@@ -92,6 +109,11 @@ GiftExchangeGroupSchema.methods.toEntity = function (): GiftExchangeGroup {
         })
     ),
     members: (members ?? []).map(toMember),
+    locked: locked ?? false,
+    matches: (matches ?? []).map(({ giverId, receiverId }) => ({
+      giverId,
+      receiverId,
+    })),
   });
 };
 

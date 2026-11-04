@@ -29,6 +29,8 @@ export default class MongoGiftExchangeGroupRepository
       name: group.name.value,
       participants: group.participants.map(toParticipantAttrs),
       members: group.members.map(toMemberAttrs),
+      locked: group.locked,
+      matches: group.matches,
     });
     return doc.toEntity();
   }
@@ -43,6 +45,8 @@ export default class MongoGiftExchangeGroupRepository
     doc.name = group.name.value;
     doc.participants = group.participants.map(toParticipantAttrs);
     doc.members = group.members.map(toMemberAttrs);
+    doc.locked = group.locked;
+    doc.matches = group.matches;
     const updatedDoc = await doc.save();
     return updatedDoc.toEntity();
   }

@@ -9,6 +9,9 @@ export enum GiftExchangeGroupError {
   ParticipantAlreadyLinked = 'PARTICIPANT_ALREADY_LINKED',
   UserAlreadyLinked = 'USER_ALREADY_LINKED',
   InviteNotPending = 'INVITE_NOT_PENDING',
+  GroupLocked = 'GROUP_LOCKED',
+  TooFewParticipants = 'TOO_FEW_PARTICIPANTS',
+  MatchingImpossible = 'MATCHING_IMPOSSIBLE',
 }
 
 export type ParticipantValidationError =
@@ -62,4 +65,22 @@ export const inviteNotPendingFailure =
   (): Failure<GiftExchangeGroupError.InviteNotPending> => ({
     type: GiftExchangeGroupError.InviteNotPending,
     reason: 'This participant does not have a pending invite',
+  });
+
+export const groupLockedFailure =
+  (): Failure<GiftExchangeGroupError.GroupLocked> => ({
+    type: GiftExchangeGroupError.GroupLocked,
+    reason: 'This group is locked, so the participant list cannot change',
+  });
+
+export const tooFewParticipantsFailure =
+  (): Failure<GiftExchangeGroupError.TooFewParticipants> => ({
+    type: GiftExchangeGroupError.TooFewParticipants,
+    reason: 'At least two participants are required',
+  });
+
+export const matchingImpossibleFailure =
+  (): Failure<GiftExchangeGroupError.MatchingImpossible> => ({
+    type: GiftExchangeGroupError.MatchingImpossible,
+    reason: 'No valid matching exists for the current exclusions',
   });

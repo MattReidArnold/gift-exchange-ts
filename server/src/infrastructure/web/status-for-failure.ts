@@ -16,14 +16,18 @@ export const statusForFailure = ({ type }: GroupFailure): number => {
     case GroupUseCaseError.GroupSaveFailed:
       return 500;
     case GroupUseCaseError.NotAMember:
+    case GroupUseCaseError.NotOwner:
       return 403;
     case GiftExchangeGroupError.ParticipantAlreadyLinked:
     case GiftExchangeGroupError.UserAlreadyLinked:
+    case GiftExchangeGroupError.GroupLocked:
       return 409;
     case GiftExchangeGroupError.GroupNameEmpty:
     case GiftExchangeGroupError.ParticipantNameEmpty:
     case GiftExchangeGroupError.ParticipantNameTaken:
     case GiftExchangeGroupError.InvalidExclusion:
+    case GiftExchangeGroupError.TooFewParticipants:
+    case GiftExchangeGroupError.MatchingImpossible:
       return 422;
     default: {
       const unhandled: never = type;
